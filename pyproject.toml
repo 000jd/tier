@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tier"
+version = "1.0.0"
+description = "TIER: layered context, repository graphs, code slicing, and agent memory"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "000jd" }]
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+ui = ["rich>=13.0"]
+mcp = ["mcp>=2.0"]
+all = ["rich>=13.0", "mcp>=2.0"]
+
+[project.scripts]
+tier = "tier.cli:main"
+tier-mcp = "tier.mcp.server:main"
+tier-mcp-sdk = "tier.mcp.sdk_server:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["tier*"]

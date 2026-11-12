@@ -1,0 +1,145 @@
+tokenizer backend: o200k  (o200k_base BPE)
+
+A. 60 uniform records x 6 fields
+format          tokens  vs JSON pretty
+--------------  ------  --------------
+JSON (pretty)   3393    +0%           
+JSON (compact)  2069    -39%          
+YAML            2612    -23%          
+CSV             1327    -61%          
+Markdown table  1616    -52%          
+TOON-style*     1451    -57%          
+TIER table      1331    -61%          
+   * TOON-style = my re-implementation of the documented tabular syntax, not the official library.
+
+B. nested config (4 levels, ~25 leaves)
+format          tokens  vs JSON pretty
+--------------  ------  --------------
+JSON (pretty)   234     +0%           
+JSON (compact)  132     -44%          
+YAML            165     -29%          
+TOON-style*     161     -31%          
+TIER kv         143     -39%          
+
+C. hand-written payments runbook (Markdown -> TIER via converter)
+   Markdown full load : 1463 tokens
+   TIER full load     : 1564 tokens  (+7% vs Markdown)
+   TIER L0 index only : 352 tokens  (24% of Markdown)
+
+question                                    top-1 section        hit@1  tok@1  hit@2  tok@2
+------------------------------------------  -------------------  -----  -----  -----  -----
+how do I roll back a bad deploy             rolling-back         Y      110    Y      327  
+who do I page at night if nobody acks       on-call-escalation   Y      124    Y      303  
+what is the connection pool size per repli  database-connection  Y      66     Y      111  
+can I deploy on friday                      deploying            Y      217    Y      348  
+what is the HighLatencyP99 alert threshold  alerts               Y      178    Y      302  
+duplicate charges what do I do              duplicate-charges    Y      56     Y      101  
+what must I never log                       security-rules       Y      128    Y      259  
+how many replicas in prod-eu                environments         Y      116    Y      334  
+   retrieval hit@1 8/8, hit@2 8/8  (answer string present in fetched text)
+   per-question fetch: mean 124 tok (top-1), 261 tok (top-2) vs 1463 for the whole Markdown doc
+
+   cumulative session cost (tokens in context), Markdown loaded once vs TIER L0 + fetch per question:
+questions  markdown  tier top-1  delta  tier top-2  delta
+---------  --------  ----------  -----  ----------  -----
+1          1463      462         -68%   679         -54% 
+2          1463      586         -60%   982         -33% 
+3          1463      652         -55%   1093        -25% 
+4          1463      869         -41%   1235        -16% 
+5          1463      1047        -28%   1259        -14% 
+6          1463      1103        -25%   1328        -9%  
+7          1463      1231        -16%   1466        +0%  
+8          1463      1347        -8%    1594        +9%  
+   session dedup avoided re-sending 0 tokens (top-1) and 843 tokens (top-2) over the session.
+   check: L0 + top-1 + dedup < full Markdown at every question: Y
+   top-1 + dedup stays under full Markdown for every question on this runbook; the margin grows with larger docs.
+
+D. real-world Markdown from GitHub (converter stress test)
+file                     md tok  tier tok  delta  L0 tok  L0/md  secs  lint err  stable  word recall
+-----------------------  ------  --------  -----  ------  -----  ----  --------  ------  -----------
+claude-code.md           677     778       +15%   221     33%    8     0         Y       100.0%     
+express-readme.md        3029    3222      +6%    416     14%    17    0         Y       99.2%      
+node-building.md         10909   11806     +8%    1285    12%    57    0         Y       99.6%      
+pytorch-contributing.md  20401   20818     +2%    919     5%     39    0         Y       99.6%      
+redis-readme.md          7255    7668      +6%    764     11%    30    0         Y       99.7%      
+   word recall = share of original alphanumeric words still present (emphasis markers are stripped by design).
+   Auto-abstracts here are heuristics (prose ledes plus synthesized rule, key, command and topic summaries).
+   Hand or LLM-written abstracts will route better still.
+
+E. paraphrase and compound-identifier retrieval (payments runbook)
+query                                v0.2 top-1           hit  v0.3 top-1           hit
+-----------------------------------  -------------------  ---  -------------------  ---
+how to undo a broken release         deploying            N    rolling-back         Y  
+double billing customer refund       rolling-back         N    duplicate-charges    Y  
+HighLatencyP99                       alerts               Y    alerts               Y  
+nighttime paging escalation          on-call-escalation   Y    on-call-escalation   Y  
+postgres max_connections saturation  database-connection  Y    database-connection  Y  
+authenticated gateway rate limit     architecture         Y    architecture         Y  
+mask card digits before logging      security-rules       Y    security-rules       Y  
+schema change table lock             migrations           Y    migrations           Y  
+friday release freeze                deploying            Y    deploying            Y  
+ledger write failure stop deploys    deploying            N    alerts               Y  
+   v0.2 exact-prefix hit@1 7/10, v0.3 hybrid hit@1 10/10
+   v0.3 adds identifier splitting, synonyms, trigram fallback, and a table-field boost.
+
+F. codebase -> TIER graph index (this TIER project)
+measure                 sections  tokens  vs raw source
+----------------------  --------  ------  -------------
+raw source files        20        49725   -            
+repo.tier full          20        7200    86% fewer    
+repo.tier L0            20        695     99% fewer    
+L0 + parser.py + 1-hop  1         1460    97% fewer    
+   symbols: 203 expected, 203 in map, missing 0; internal edges: 75; lint errors: 0; round-trip stable: Y
+   check: L0 + 1-hop >=70% fewer than raw: Y; exported names preserved: Y
+   Modules keep exact line ranges and '>' edges, so tier_get --follow returns dependency signatures.
+
+G. end-to-end 4-layer coding workflow (read, locate, signatures, slices, impact/sync)
+step                                tokens
+----------------------------------  ------
+1. L0 repo index                    695   
+2. hybrid find -> module            34    
+3. L2 signatures + 1-hop            765   
+4. L3 slices: parse, from_md, find  2762  
+5. impact + incremental sync        185   
+TOTAL workflow                      4441  
+raw source baseline                 49725 
+full repo.tier baseline             7200  
+   savings vs raw source: 91.1%; vs full repo.tier: +38.3%
+   exact L3 slices: 3/3; impact dependents: 10/10; incremental sync after edit: Y
+   check: total workflow >85% under raw source: Y
+
+H. polyglot repository map (Python, TypeScript, Go, Rust)
+measure                       sections  tokens  vs raw   
+----------------------------  --------  ------  ---------
+raw polyglot source           36        8249    -        
+repo.tier full L2             36        5636    32% fewer
+L0 index                      36        1036    87% fewer
+L0 + full L2 + 7 L3 slices    36        7141    13% fewer
+L0 + target L2 + 7 L3 slices  5         2854    65% fewer
+   symbol recall: 116/116 (missing 0); ranges: 116/116; edge recall: 10/10; slices: 5 groups, missing 0
+   lint errors: 0; round-trip stable: Y
+   check: all exported symbols captured: Y; all cross-file edges captured: Y; surgical L0+L2+L3 under 35% of raw: Y
+
+I. blind retrieval over a merged 50+ section corpus (runbook + handbook + SPEC + GitHub docs)
+query                                     top-1 section                        hit@1  tok@1  hit@2  tok@2
+----------------------------------------  -----------------------------------  -----  -----  -----  -----
+how do I roll back a bad deploy           rb-rolling-back                      Y      112    Y      174  
+who do I page at night if nobody acks     rb-on-call-escalation                Y      125    Y      192  
+what is the connection pool size per rep  rb-database-connection               Y      68     Y      120  
+can I deploy on friday                    hb-deploy                            Y      129    Y      349  
+what is the HighLatencyP99 alert thresho  rb-alerts                            Y      180    Y      305  
+duplicate charges what do I do            rb-duplicate-charges                 Y      58     Y      110  
+what must I never log                     rb-security-rules                    Y      129    Y      363  
+how many replicas in prod-eu              rb-environments                      Y      117    Y      337  
+session deduplication invalidates slices  spec-session-deduplication           Y      117    Y      348  
+what closes a named guard block           spec-safety                          Y      197    Y      333  
+what does tier_impact report for blast r  spec-mcp-server                      Y      310    Y      470  
+how do I run the test suite               express_readme-running-tests         Y      35     Y      168  
+how do I install prerequisites on Window  node_building-windows-prerequisites  Y      70     Y      128  
+max size of ccache cache                  pytorch_contributing-max-size-cache  Y      29     Y      197  
+skip CI while iterating PR title          pytorch_contributing-skip-ci-while   Y      337    Y      469  
+   corpus sections: 197; full corpus 52275 tokens; L0 index 5905 tokens
+   hit@1 15/15, hit@2 15/15, answer string present in top-1: 15/15
+   mean top-1 fetch 134 tokens; mean L0 + top-1 6039 tokens (88% below full-corpus loading)
+   check: hit@1 >= 14/15: Y; mean L0+top-1 under 20% of full corpus: Y
+

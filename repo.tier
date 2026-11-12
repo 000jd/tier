@@ -1,0 +1,661 @@
+%tier 1.0.0
+%title tier repository map
+%sum 24 source files; languages: javascript 1, python 23; entrypoints: src/tier/__main__.py, src/tier/cli.py, src/tier/mcp/__main__.py, src/tier/mcp/server.py
+%rule Read the repo.tier module map before opening source files; fetch only the listed line ranges.
+%rule Use tier_get with follow=true to pull a module and its direct local dependencies.
+%rule Use tier_slice for exact L3 source slices instead of reading whole files.
+@benchmarks-bench.py benchmarks/bench.py
+? Token benchmarks for TIER vs Markdown / JSON / YAML / CSV / TOON-style. Tokenizer: o200k_base BPE (OpenAI) via node `gpt-tokenizer` when...; symbols: say, toks, table, bench_records, bench_nested, bench_runbook, words, bench_corpus
+= file
+  path benchmarks/bench.py
+  language python
+  lines 1336
+  sha256 1a439b2fa3f9bf11
+  mtime 1794492162067668114
+  size 47404
+|symbols[18]{kind,name,signature,lines}
+function,say,def say(s=''),37-39
+function,toks,def toks(strings),42-44
+function,table,"def table(rows, headers)",47-52
+function,bench_records,def bench_records(),56-102
+function,bench_nested,def bench_nested(),106-156
+function,bench_runbook,def bench_runbook(),172-219
+function,words,def words(s),223-224
+function,bench_corpus,def bench_corpus(),227-251
+function,bench_paraphrase,def bench_paraphrase(),269-287
+function,bench_repo,def bench_repo(),290-332
+function,bench_workflow,def bench_workflow(),336-436
+function,write_polyglot,def write_polyglot(root),1093-1099
+function,_poly_rows,"def _poly_rows(doc, rel)",1102-1112
+function,_poly_range_check,"def _poly_range_check(root, doc)",1115-1151
+function,bench_polyglot,def bench_polyglot(),1154-1215
+function,_merge_docs,def _merge_docs(docs),1239-1265
+function,_blind_corpus,def _blind_corpus(),1268-1283
+function,bench_blind_retrieval,def bench_blind_retrieval(),1286-1320
+> src-tier-__init__.py
+@benchmarks-count.mjs benchmarks/count.mjs
+? reads JSON array of strings on stdin -> prints JSON array of o200k_base token counts; symbols: none
+= file
+  path benchmarks/count.mjs
+  language javascript
+  lines 6
+  sha256 ed13de18716831cf
+  mtime 1794449744000000000
+  size 302
+@src-tier-__init__.py src/tier/__init__.py
+? TIER: layered context, repository graphs, code slicing, and agent memory.; symbols: none
+= file
+  path src/tier/__init__.py
+  language python
+  lines 53
+  sha256 762a1b7a0d9d15e6
+  mtime 1794491332358394905
+  size 2662
+> src-tier-converter.py
+> src-tier-lint.py
+> src-tier-memory.py
+> src-tier-models.py
+> src-tier-parser.py
+> src-tier-pipe.py
+> src-tier-plugin.py
+> src-tier-repo.py
+> src-tier-retrieval.py
+> src-tier-tokens.py
+@src-tier-__main__.py src/tier/__main__.py
+? Enable `python -m tier`.; symbols: none
+= file
+  path src/tier/__main__.py
+  language python
+  lines 5
+  sha256 c2b056f994322999
+  mtime 1794491332358394905
+  size 110
+> src-tier-cli.py
+@src-tier-cli.py src/tier/cli.py
+? TIER command-line interface.; symbols: main
+= file
+  path src/tier/cli.py
+  language python
+  lines 340
+  sha256 6f7cb8846cc2be2b
+  mtime 1794498712346473232
+  size 14552
+|symbols[2]{kind,name,signature,lines}
+function,_stdin_text,def _stdin_text() -> str,27-31
+function,main,def main(argv=None),34-340
+> src-tier-converter.py
+> src-tier-doctor.py
+> src-tier-installer.py
+> src-tier-lint.py
+> src-tier-memory.py
+> src-tier-models.py
+> src-tier-parser.py
+> src-tier-pipe.py
+> src-tier-plugin.py
+> src-tier-repo.py
+> src-tier-retrieval.py
+> src-tier-tokens.py
+> src-tier-ui.py
+@src-tier-converter.py src/tier/converter.py
+? src/tier/converter.py (python module); symbols: from_md, from_json, from_payload, to_md
+= file
+  path src/tier/converter.py
+  language python
+  lines 451
+  sha256 5c3387d06deb3f82
+  mtime 1794491370282726807
+  size 16416
+|symbols[17]{kind,name,signature,lines}
+function,_esc,def _esc(line: str) -> str,14-18
+function,_md_cells,def _md_cells(line: str) -> list,21-65
+function,_csv_row,def _csv_row(cells) -> str,68-71
+function,_make_id,"def _make_id(title: str, used: set) -> str",74-85
+function,_ref_topics,def _ref_topics(lines: list) -> list,88-94
+function,_auto_abstract,def _auto_abstract(sec: Section) -> str,97-154
+function,from_md,"def from_md(text: str, strip_emphasis: bool=True) -> Doc",157-269
+function,_json_scalar,def _json_scalar(v) -> str,272-275
+function,_json_cell,def _json_cell(v) -> str,278-279
+function,_one_line_text,def _one_line_text(value) -> str,282-283
+function,_table_name,def _table_name(name: str) -> str,286-290
+function,_records_table,"def _records_table(records: list, name: str)",293-307
+function,_json_kv_lines,def _json_kv_lines(obj: dict) -> list,310-330
+function,_json_body,"def _json_body(name: str, value)",333-346
+function,from_json,def from_json(obj) -> Doc,349-390
+function,from_payload,"def from_payload(text: str, fmt: str='auto') -> Doc",393-405
+function,to_md,def to_md(doc: Doc) -> str,408-451
+> src-tier-models.py
+> src-tier-parser.py
+@src-tier-doctor.py src/tier/doctor.py
+? Health and configuration diagnostics for `tier doctor`.; symbols: Check, run_doctor, exit_code, render, render_json
+= file
+  path src/tier/doctor.py
+  language python
+  lines 192
+  sha256 33dbe59364344c69
+  mtime 1794498991287839427
+  size 8263
+|symbols[7]{kind,name,signature,lines}
+class,Check,class Check,20-24
+function,_check_entry,"def _check_entry(spec: ClientSpec, root: str, find_executable) -> Check",27-65
+function,_hook_check,def _hook_check(spec: ClientSpec) -> Optional[Check],68-87
+function,run_doctor,"def run_doctor(root: str='.', home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, find_executable=None) -> List[Check]",90-173
+function,exit_code,def exit_code(checks: Sequence[Check]) -> int,176-177
+function,render,"def render(checks: Sequence[Check], ui: UI) -> None",180-188
+function,render_json,def render_json(checks: Sequence[Check]) -> str,191-192
+> src-tier-installer.py
+> src-tier-lint.py
+> src-tier-parser.py
+> src-tier-repo.py
+> src-tier-tokens.py
+> src-tier-ui.py
+@src-tier-installer.py src/tier/installer.py
+? Interactive/non-interactive MCP installer with safe config merging.; symbols: ClientSpec, Change, client_specs, spec_by_id, parse_clients, default_clients, server_entry, install
+= file
+  path src/tier/installer.py
+  language python
+  lines 579
+  sha256 c7cbd623bd6dee0c
+  mtime 1794499181753848392
+  size 22438
+|symbols[37]{kind,name,signature,lines}
+class,ClientSpec,class ClientSpec,22-34
+class,Change,class Change,37-42
+function,_home,def _home(home: Optional[str]) -> str,61-62
+function,_desktop_path,"def _desktop_path(home: str, env: dict, platform: str) -> str",65-71
+function,_load_json_soft,def _load_json_soft(path: str),74-83
+function,client_specs,"def client_specs(root: str, home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None) -> List[ClientSpec]",86-130
+function,spec_by_id,"def spec_by_id(specs: Sequence[ClientSpec], client_id: str) -> Optional[ClientSpec]",133-137
+function,parse_clients,"def parse_clients(value: Optional[str], specs: Sequence[ClientSpec]) -> List[str]",140-160
+function,default_clients,def default_clients(specs: Sequence[ClientSpec]) -> List[str],163-167
+function,server_entry,"def server_entry(root: str, client_id: str='', find_executable=None) -> dict",170-182
+function,_json_text,def _json_text(data: dict) -> str,185-186
+function,_unified,"def _unified(path: str, before: str, after: str) -> str",189-192
+function,_backup,def _backup(path: str) -> str,195-202
+function,_save_text,"def _save_text(path: str, after: str, dry_run: bool, changes: List[Change], backup: bool=True) -> None",205-216
+function,_save_json,"def _save_json(path: str, data: dict, dry_run: bool, changes: List[Change]) -> None",219-220
+function,_merge_server,"def _merge_server(spec: ClientSpec, root: str, dry_run: bool, changes: List[Change], find_executable=None) -> None",223-232
+function,_is_tier_hook,def _is_tier_hook(cmd) -> bool,235-238
+function,_hook_command,def _hook_command(find_executable=None) -> str,241-247
+function,_filter_hooks,"def _filter_hooks(post: list, desired: str, uninstall: bool=False)",250-272
+function,_merge_hook,"def _merge_hook(path: str, dry_run: bool, changes: List[Change], find_executable=None) -> None",275-293
+function,_remove_hook,"def _remove_hook(path: str, dry_run: bool, changes: List[Change]) -> None",296-308
+function,_marked_text,"def _marked_text(existing: str, block: str) -> str",311-319
+function,_strip_marked,def _strip_marked(existing: str) -> str,322-327
+function,_generic_instructions,def _generic_instructions() -> str,330-336
+function,_write_instructions,"def _write_instructions(path: str, block: str, dry_run: bool, changes: List[Change]) -> None",339-341
+function,_remove_instructions,"def _remove_instructions(path: str, dry_run: bool, changes: List[Change]) -> None",344-348
+function,_instruction_paths,"def _instruction_paths(specs: Sequence[ClientSpec], selected: Sequence[str], mode: str) -> List[str]",351-367
+function,_repo_stats,"def _repo_stats(root: str, doc: Doc) -> dict",370-377
+function,_generate_repo,"def _generate_repo(root: str, dry_run: bool, changes: List[Change]) -> dict",380-400
+function,_ask,"def _ask(ask: Optional[Callable[[str], str]], prompt: str, default: str) -> str",403-407
+function,_ask_bool,"def _ask_bool(ask, prompt: str, default: bool) -> bool",410-412
+function,_ask_instructions,"def _ask_instructions(ask, default: str='both') -> str",415-417
+function,_interactive_clients,"def _interactive_clients(specs: Sequence[ClientSpec], selected: Sequence[str], ask, ui: UI) -> List[str]",420-447
+function,_summary,"def _summary(ui: UI, result: dict) -> None",450-480
+function,install,"def install(target: str='.', clients=None, *, yes: bool=False, dry_run: bool=False, uninstall: bool=False, repo: bool=True, hook: bool=True, instructions: str='both', interactive: Optional[bool]=None, home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, ask=None, ui: Optional[UI]=None, find_executable=None) -> dict",483-547
+function,_uninstall,"def _uninstall(root: str, specs: Sequence[ClientSpec], selected: Sequence[str], dry_run: bool, ui: UI) -> dict",550-574
+function,setup,"def setup(*args, **kwargs) -> dict",577-579
+> src-tier-models.py
+> src-tier-parser.py
+> src-tier-plugin.py
+> src-tier-repo.py
+> src-tier-retrieval.py
+> src-tier-tokens.py
+> src-tier-ui.py
+@src-tier-lint.py src/tier/lint.py
+? src/tier/lint.py (python module); symbols: lint
+= file
+  path src/tier/lint.py
+  language python
+  lines 58
+  sha256 baa3eb302018f302
+  mtime 1794491428386750105
+  size 2433
+|symbols[1]{kind,name,signature,lines}
+function,lint,"def lint(doc: Doc, max_section_tokens: int=800)",10-58
+> src-tier-models.py
+> src-tier-parser.py
+> src-tier-tokens.py
+@src-tier-memory.py src/tier/memory.py
+? src/tier/memory.py (python module); symbols: remember
+= file
+  path src/tier/memory.py
+  language python
+  lines 142
+  sha256 c8c8dc1a316acd11
+  mtime 1794491370283052817
+  size 5764
+|symbols[2]{kind,name,signature,lines}
+function,_validate_section_body,def _validate_section_body(lines: list),10-37
+function,remember,"def remember(path: str, action: str, section: str='', title: str='', abstract: str='', body=None, text: str='', key: str='', value: str='', target: str='', note: str='') -> dict",40-142
+> src-tier-lint.py
+> src-tier-models.py
+> src-tier-parser.py
+@src-tier-models.py src/tier/models.py
+? Core data model, constants, and filesystem helpers for TIER.; symbols: render_lines, Section, Doc; methods: 2
+= file
+  path src/tier/models.py
+  language python
+  lines 157
+  sha256 a34b619d0b74a9cb
+  mtime 1794491693117396247
+  size 5389
+|symbols[13]{kind,name,signature,lines}
+function,_table_count,def _table_count(raw) -> int,23-28
+function,_csv_cells,"def _csv_cells(line: str, strict: bool=False) -> list",31-41
+function,_table_rows,"def _table_rows(lines: list, i: int, n: int) -> list",44-45
+function,_render_table,"def _render_table(name: str, cols: list, rows: list, mode: str) -> list",48-63
+function,render_lines,"def render_lines(lines: list, table_mode: str='raw') -> list",66-83
+function,_clip,"def _clip(s: str, n: int) -> str",86-90
+function,_read_text,def _read_text(path: str) -> str,93-95
+function,_atomic_write,"def _atomic_write(path: str, text: str) -> None",98-120
+function,_inside,"def _inside(root: str, path: str) -> bool",123-126
+class,Section,class Section,129-146
+method,Section.text,"def text(self, table_mode: str='raw') -> str",138-146
+class,Doc,class Doc,149-157
+method,Doc.by_id,def by_id(self) -> dict,156-157
+@src-tier-parser.py src/tier/parser.py
+? src/tier/parser.py (python module); symbols: wrap_untrusted, parse, nodes, render_section, to_obj, dumps, is_repo_doc
+= file
+  path src/tier/parser.py
+  language python
+  lines 282
+  sha256 bcc99e3c0d3ef175
+  mtime 1794491685423768925
+  size 8932
+|symbols[14]{kind,name,signature,lines}
+function,_data_open,def _data_open(line: str),13-18
+function,_data_closes,"def _data_closes(line: str, guard: str) -> bool",21-24
+function,wrap_untrusted,"def wrap_untrusted(source: str, content: str) -> str",27-40
+function,parse,def parse(text: str) -> Doc,43-111
+function,_kv_split,def _kv_split(s: str),114-116
+function,_parse_kv,"def _parse_kv(first: str, kids: list) -> dict",119-142
+function,nodes,def nodes(sec: Section) -> list,145-192
+function,_live_lines,def _live_lines(lines: list) -> list,195-219
+function,render_section,"def render_section(sec: Section, table_mode: str='raw') -> str",222-223
+function,to_obj,def to_obj(doc: Doc) -> dict,226-234
+function,dumps,"def dumps(doc: Doc, pretty: bool=False) -> str",237-261
+function,_repo_file_meta,def _repo_file_meta(sec: Section) -> dict,264-273
+function,is_repo_doc,def is_repo_doc(doc: Doc) -> bool,276-277
+function,_load,def _load(path: str) -> Doc,280-282
+> src-tier-models.py
+@src-tier-pipe.py src/tier/pipe.py
+? src/tier/pipe.py (python module); symbols: detect_stream_format, log_doc, from_stream, pipe_compress, hook_process
+= file
+  path src/tier/pipe.py
+  language python
+  lines 243
+  sha256 58a3bff9d15d075c
+  mtime 1794491370283125677
+  size 8527
+|symbols[9]{kind,name,signature,lines}
+function,detect_stream_format,def detect_stream_format(text: str) -> str,19-29
+function,_log_shape,def _log_shape(line: str) -> str,32-39
+function,log_doc,def log_doc(text: str) -> Doc,42-94
+function,from_stream,"def from_stream(text: str, fmt: str='auto') -> Doc",97-107
+function,_tokens,def _tokens(text: str) -> int,110-111
+function,_fit_text,"def _fit_text(text: str, budget: int) -> str",114-131
+function,pipe_compress,"def pipe_compress(text: str, fmt: str='auto', max_tokens: int=None, out_path: str=None) -> str",134-185
+function,_text_fields,"def _text_fields(obj, prefix: str='', depth: int=0) -> list",188-200
+function,hook_process,"def hook_process(text: str, max_tokens: int=600, fmt: str='auto') -> dict",203-243
+> src-tier-converter.py
+> src-tier-models.py
+> src-tier-parser.py
+> src-tier-retrieval.py
+> src-tier-tokens.py
+@src-tier-plugin.py src/tier/plugin.py
+? src/tier/plugin.py (python module); symbols: init_plugin
+= file
+  path src/tier/plugin.py
+  language python
+  lines 143
+  sha256 fa92f51a26656d36
+  mtime 1794491480429260104
+  size 5538
+|symbols[5]{kind,name,signature,lines}
+function,_plugin_instructions,def _plugin_instructions(doc: Doc) -> str,18-30
+function,_write_marked_instructions,"def _write_marked_instructions(path: str, block: str)",33-45
+function,_hook_commands,def _hook_commands(value) -> list,48-58
+function,_merge_hook_settings,def _merge_hook_settings(target: str) -> str,61-85
+function,init_plugin,"def init_plugin(target_dir: str, convert_docs: bool=False, write_instructions: str=None, hook: bool=False) -> dict",88-143
+> src-tier-converter.py
+> src-tier-models.py
+> src-tier-parser.py
+> src-tier-repo.py
+> src-tier-retrieval.py
+@src-tier-repo.py src/tier/repo.py
+? src/tier/repo.py (python module); symbols: repo_source_files, from_repo, sync_repo, slice_symbols, impact, render_impact
+= file
+  path src/tier/repo.py
+  language python
+  lines 1274
+  sha256 47a49cbd3e66fb50
+  mtime 1794492677442369401
+  size 47734
+|symbols[46]{kind,name,signature,lines}
+function,repo_source_files,"def repo_source_files(root: str, max_file_bytes: int=512 * 1024, max_files: int=2000)",32-65
+function,_repo_id,"def _repo_id(rel: str, used: set) -> str",68-78
+function,_py_module_name,def _py_module_name(rel: str) -> str,81-86
+function,_register_py_module,"def _register_py_module(module_to_rel: dict, rel: str) -> None",89-94
+function,_leading_comment,"def _leading_comment(text: str, prefix: str='//') -> str",97-124
+function,_strip_code_strings,"def _strip_code_strings(line: str, in_block_comment: bool=False, rust: bool=False)",127-166
+function,_brace_end,"def _brace_end(lines: list, start: int, rust: bool=False) -> int",169-184
+function,_sig_line,"def _sig_line(lines: list, start: int, end: int) -> str",187-199
+function,_py_symbols,def _py_symbols(text: str),202-297
+function,_js_expr_end,"def _js_expr_end(lines: list, start: int) -> int",307-321
+function,_js_rhs_arrow,"def _js_rhs_arrow(text: str, pos: int)",324-384
+function,_js_top_level_semicolon,"def _js_top_level_semicolon(text: str, pos: int) -> bool",387-396
+function,_js_arrow_name,"def _js_arrow_name(lines: list, idx: int)",399-430
+function,_js_symbols,def _js_symbols(text: str),433-491
+function,_go_symbols,def _go_symbols(text: str),494-521
+function,_rust_decl_end,"def _rust_decl_end(lines: list, start: int)",524-542
+function,_rust_symbols,def _rust_symbols(text: str),545-591
+function,_extract_symbols,"def _extract_symbols(rel: str, text: str)",594-604
+function,_symbol_table,def _symbol_table(symbols: list) -> list,607-614
+function,_top_symbol_names,"def _top_symbol_names(symbols: list, ext: str) -> list",617-628
+function,_resolve_py_imports,"def _resolve_py_imports(rel: str, imports: list, module_to_rel: dict) -> set",631-659
+function,_resolve_js_imports,"def _resolve_js_imports(rel: str, sources: list, rel_set: set) -> set",662-680
+function,_resolve_go_imports,"def _resolve_go_imports(rel: str, imports: list, rel_set: set, go_module: str) -> set",683-695
+function,_resolve_rust_mods,"def _resolve_rust_mods(rel: str, mods: list, rel_set: set) -> set",698-706
+function,_js_import_sources,def _js_import_sources(text: str) -> list,709-717
+function,_go_import_paths,def _go_import_paths(text: str) -> list,720-729
+function,_rust_mods,def _rust_mods(text: str) -> list,732-741
+function,_go_module,def _go_module(root: str) -> str,744-749
+function,_sha256,def _sha256(text: str) -> str,752-753
+function,_repo_info,"def _repo_info(rel: str, full: str, ext: str, text: str=None) -> dict",756-769
+function,_repo_add_deps,"def _repo_add_deps(info: dict, rel_set: set, module_to_rel: dict, go_module: str)",772-785
+function,_repo_section,"def _repo_section(info: dict, rel_to_id: dict) -> Section",788-810
+function,_repo_summary,"def _repo_summary(rels: list, lang_counts: dict, entries: list) -> str",813-818
+function,from_repo,"def from_repo(root: str, max_files: int=2000) -> Doc",821-860
+function,sync_repo,"def sync_repo(path: str, root: str=None, session: Session=None, session_key: str=None, write: bool=True) -> dict",863-983
+function,_symbol_rows,def _symbol_rows(sec: Section) -> list,986-993
+function,_resolve_module,"def _resolve_module(doc: Doc, module: str)",996-1008
+function,_slice_range,def _slice_range(text: str),1011-1019
+function,slice_symbols,"def slice_symbols(doc: Doc, module: str, symbols, root: str=None, context_lines: int=0, session: Session=None, session_key: str='', force: bool=False)",1022-1078
+function,_build_graph,def _build_graph(doc: Doc),1084-1097
+function,_reachable,"def _reachable(graph: dict, start: str) -> list",1100-1109
+function,_resolve_impact_target,"def _resolve_impact_target(doc: Doc, target: str) -> str",1112-1130
+function,_git_changed_paths,def _git_changed_paths(root: str),1133-1165
+function,_changed_symbols,"def _changed_symbols(old_rows: list, ext: str, text: str)",1168-1176
+function,impact,"def impact(doc: Doc, target: str, root: str=None, git: bool=False) -> dict",1179-1254
+function,render_impact,def render_impact(result: dict) -> str,1257-1274
+> src-tier-converter.py
+> src-tier-models.py
+> src-tier-parser.py
+> src-tier-retrieval.py
+@src-tier-retrieval.py src/tier/retrieval.py
+? src/tier/retrieval.py (python module); symbols: split_identifier, index, resolve, get, Session, find
+= file
+  path src/tier/retrieval.py
+  language python
+  lines 369
+  sha256 c9e66cdb2cfe805d
+  mtime 1794491411001185661
+  size 13302
+|symbols[22]{kind,name,signature,lines}
+function,_norm,def _norm(w: str) -> str,51-52
+function,split_identifier,def split_identifier(token: str) -> list,55-74
+function,_index_tokens,def _index_tokens(text: str) -> list,77-81
+function,_query_terms,def _query_terms(query: str) -> list,84-91
+function,_synonym_map,def _synonym_map() -> dict,94-104
+function,_trigrams,def _trigrams(s: str) -> set,110-114
+function,_trigram_sim,"def _trigram_sim(a: str, b: str) -> float",117-119
+function,_rule_count,def _rule_count(sec: Section) -> int,122-123
+function,index,"def index(doc: Doc, tokens: bool=True) -> str",126-143
+function,resolve,"def resolve(doc: Doc, ids: list, follow: bool=False)",146-161
+function,get,"def get(doc: Doc, ids: list, follow: bool=False, table_mode: str='raw')",164-168
+class,Session,class Session,171-213
+method,Session.__init__,def __init__(self),174-175
+method,Session.reset,"def reset(self, key=None)",177-181
+method,Session.invalidate,"def invalidate(self, key: str, section_id: str)",183-192
+method,Session.mark,"def mark(self, key: str, entry: str)",194-195
+method,Session.is_marked,"def is_marked(self, key: str, entry: str) -> bool",197-198
+method,Session.get,"def get(self, doc: Doc, ids: list, follow: bool=False, table_mode: str='raw', key: str='', force: bool=False)",200-213
+function,_find_legacy,"def _find_legacy(doc: Doc, query: str, k: int=3)",216-248
+function,_is_test_module,def _is_test_module(sec: Section) -> bool,251-262
+function,_is_navigation_section,def _is_navigation_section(sec: Section) -> bool,265-267
+function,find,"def find(doc: Doc, query: str, k: int=3, legacy: bool=False)",270-369
+> src-tier-models.py
+> src-tier-parser.py
+> src-tier-tokens.py
+@src-tier-tokens.py src/tier/tokens.py
+? Token counting bridge: optional Node o200k BPE helper, otherwise chars/4.; symbols: count_tokens
+= file
+  path src/tier/tokens.py
+  language python
+  lines 48
+  sha256 cb59280961eacffa
+  mtime 1794492366588870216
+  size 1594
+|symbols[2]{kind,name,signature,lines}
+function,_count_js,def _count_js() -> str,15-26
+function,count_tokens,def count_tokens(strings: list),29-48
+@src-tier-ui.py src/tier/ui.py
+? Small terminal UI: ANSI/box-drawing by default, optional rich enhancement.; symbols: UI, default_ui; methods: 11
+= file
+  path src/tier/ui.py
+  language python
+  lines 129
+  sha256 181f480e038e447f
+  mtime 1794499361685646694
+  size 4747
+|symbols[13]{kind,name,signature,lines}
+class,UI,class UI,18-121
+method,UI.__init__,"def __init__(self, stream=None, use_rich: Optional[bool]=None, color: Optional[bool]=None, env=None)",21-39
+method,UI._c,"def _c(self, style: str, text: str) -> str",41-44
+method,UI._write,"def _write(self, text: str='') -> None",46-51
+method,UI.header,"def header(self, title: str, subtitle: str='') -> None",53-67
+method,UI.info,"def info(self, text: str) -> None",69-70
+method,UI.success,"def success(self, text: str) -> None",72-73
+method,UI.warn,"def warn(self, text: str) -> None",75-76
+method,UI.error,"def error(self, text: str) -> None",78-79
+method,UI.table,"def table(self, headers: Sequence[str], rows: Iterable[Sequence[object]]) -> None",81-105
+method,UI.raw,"def raw(self, text: str) -> None",107-108
+method,UI.panel,"def panel(self, title: str, lines: Sequence[str]) -> None",110-121
+function,default_ui,"def default_ui(plain: bool=False, no_color: bool=False) -> UI",124-129
+@src-tier-mcp-__init__.py src/tier/mcp/__init__.py
+? MCP stdio server package for TIER.; symbols: none
+= file
+  path src/tier/mcp/__init__.py
+  language python
+  lines 9
+  sha256 a9755a9bba353f18
+  mtime 1794491354769390561
+  size 286
+> src-tier-mcp-server.py
+@src-tier-mcp-__main__.py src/tier/mcp/__main__.py
+? Enable `python -m tier.mcp`.; symbols: none
+= file
+  path src/tier/mcp/__main__.py
+  language python
+  lines 5
+  sha256 5695e044d0fc3634
+  mtime 1794491354769390561
+  size 117
+> src-tier-mcp-server.py
+@src-tier-mcp-sdk_server.py src/tier/mcp/sdk_server.py
+? Optional official MCP SDK adapter for TIER. The default `tier-mcp` / `python -m tier.mcp` server is the zero-dependency stdlib JSON-RPC...; symbols: MissingSDKError, build_server, main
+= file
+  path src/tier/mcp/sdk_server.py
+  language python
+  lines 174
+  sha256 b350de4cb52df238
+  mtime 1794498890808221989
+  size 6442
+|symbols[5]{kind,name,signature,lines}
+class,MissingSDKError,class MissingSDKError(RuntimeError),17-18
+function,_load_server_class,def _load_server_class(),21-34
+function,_description,def _description(name: str) -> str,37-41
+function,build_server,"def build_server(root: str='.', server_cls=None, server_name: str='tier')",44-130
+function,main,def main(argv=None) -> int,133-163
+> src-tier-mcp-__init__.py
+> src-tier-mcp-server.py
+@src-tier-mcp-server.py src/tier/mcp/server.py
+? MCP stdio server for TIER docs. No dependencies. python -m tier.mcp /path/to/docs # serves every *.tier under that dir Tools: tier_list -...; symbols: safe, safe_dir, safe_write, load, call, handle, main
+= file
+  path src/tier/mcp/server.py
+  language python
+  lines 395
+  sha256 a404567de2cafc66
+  mtime 1794492057320532935
+  size 16661
+|symbols[8]{kind,name,signature,lines}
+function,safe,def safe(path: str) -> str,186-192
+function,safe_dir,def safe_dir(path: str) -> str,195-201
+function,safe_write,def safe_write(path: str) -> str,204-212
+function,load,def load(path: str) -> Doc,215-217
+function,_load_doc,"def _load_doc(path: str, auto_sync: bool=True)",220-232
+function,call,"def call(name: str, a: dict) -> str",235-338
+function,handle,def handle(msg: dict),341-372
+function,main,def main(),375-391
+> src-tier-lint.py
+> src-tier-memory.py
+> src-tier-models.py
+> src-tier-parser.py
+> src-tier-pipe.py
+> src-tier-repo.py
+> src-tier-retrieval.py
+> src-tier-tokens.py
+@tests-test_installer.py tests/test_installer.py
+? tests/test_installer.py (python module); symbols: InstallerTests, DoctorTests, SDKAdapterTests; methods: 17
+= file
+  path tests/test_installer.py
+  language python
+  lines 398
+  sha256 36211f31461ff448
+  mtime 1794499609638325881
+  size 19532
+|symbols[25]{kind,name,signature,lines}
+function,_ui,def _ui(),22-23
+function,_put,"def _put(root, name, text)",26-31
+function,_read,def _read(path),34-36
+function,_which,def _which(name),39-46
+function,_snapshot,def _snapshot(root),49-57
+class,InstallerTests,class InstallerTests(unittest.TestCase),60-251
+method,InstallerTests.test_client_paths_linux_macos_windows,def test_client_paths_linux_macos_windows(self),61-88
+method,InstallerTests.test_detection_and_invalid_config,def test_detection_and_invalid_config(self),90-102
+method,InstallerTests.test_server_entry_absolute_and_vscode_type,def test_server_entry_absolute_and_vscode_type(self),104-112
+method,InstallerTests.test_install_merges_preserves_backs_up_and_summarizes,def test_install_merges_preserves_backs_up_and_summarizes(self),114-159
+method,InstallerTests.test_install_is_idempotent,def test_install_is_idempotent(self),161-173
+method,InstallerTests.test_dry_run_makes_no_mutations,def test_dry_run_makes_no_mutations(self),175-189
+method,InstallerTests.test_uninstall_removes_only_tier,def test_uninstall_removes_only_tier(self),191-210
+method,InstallerTests.test_no_repo_no_hook_no_instructions,def test_no_repo_no_hook_no_instructions(self),212-221
+method,InstallerTests.test_setup_alias_cli,def test_setup_alias_cli(self),223-233
+method,InstallerTests.test_interactive_selection_and_yes_default,def test_interactive_selection_and_yes_default(self),235-251
+class,DoctorTests,class DoctorTests(unittest.TestCase),254-309
+method,DoctorTests._healthy,"def _healthy(self, root, home)",255-265
+method,DoctorTests.test_doctor_healthy_and_json,def test_doctor_healthy_and_json(self),267-278
+method,DoctorTests.test_doctor_cli,def test_doctor_cli(self),280-290
+method,DoctorTests.test_doctor_broken_config_and_stale_repo,def test_doctor_broken_config_and_stale_repo(self),292-309
+class,SDKAdapterTests,class SDKAdapterTests(unittest.TestCase),312-394
+method,SDKAdapterTests.test_v2_and_v1_loader_fallbacks,def test_v2_and_v1_loader_fallbacks(self),313-344
+method,SDKAdapterTests.test_missing_sdk_message,def test_missing_sdk_message(self),346-354
+method,SDKAdapterTests.test_all_eleven_tools_register_and_call,def test_all_eleven_tools_register_and_call(self),356-394
+> src-tier-__init__.py
+> src-tier-cli.py
+> src-tier-doctor.py
+> src-tier-installer.py
+> src-tier-mcp-__init__.py
+> src-tier-mcp-sdk_server.py
+> src-tier-ui.py
+@tests-test_tier.py tests/test_tier.py
+? tests/test_tier.py (python module); symbols: T, Audit; methods: 82
+= file
+  path tests/test_tier.py
+  language python
+  lines 1443
+  sha256 49e0be01e11df8dc
+  mtime 1794499609638093451
+  size 71271
+|symbols[88]{kind,name,signature,lines}
+class,T,class T(unittest.TestCase),21-795
+method,T.rt,"def rt(self, text)",22-24
+method,T.read,"def read(self, name)",26-28
+method,T.put,"def put(self, root, name, text)",30-37
+method,T.symbols_of,"def symbols_of(self, doc, sid)",39-45
+method,T.sample_repo,"def sample_repo(self, root)",47-58
+method,T.write_repo_tier,"def write_repo_tier(self, root, doc=None)",60-65
+method,T.test_roundtrip_stable,def test_roundtrip_stable(self),67-72
+method,T.test_table_empty_header_cell_kept,def test_table_empty_header_cell_kept(self),74-79
+method,T.test_table_escaped_pipe_and_commas,def test_table_escaped_pipe_and_commas(self),81-85
+method,T.test_table_rows_are_opaque,def test_table_rows_are_opaque(self),87-93
+method,T.test_table_declared_count_enforced,def test_table_declared_count_enforced(self),95-97
+method,T.test_kv_nested,def test_kv_nested(self),99-103
+method,T.test_escape_sigil_lines,def test_escape_sigil_lines(self),105-110
+method,T.test_fence_content_not_parsed,def test_fence_content_not_parsed(self),112-115
+method,T.test_untrusted_block,def test_untrusted_block(self),117-121
+method,T.test_refs_and_follow,def test_refs_and_follow(self),123-127
+method,T.test_comments_and_blanks_stripped,def test_comments_and_blanks_stripped(self),129-131
+method,T.test_find_basic,def test_find_basic(self),133-135
+method,T.test_rule_only_section_gets_abstract,def test_rule_only_section_gets_abstract(self),137-141
+method,T.test_rule_section_wins_first_hit,def test_rule_section_wins_first_hit(self),143-145
+method,T.test_kv_and_command_abstracts,def test_kv_and_command_abstracts(self),147-151
+method,T.test_parent_heading_reference_graph,def test_parent_heading_reference_graph(self),153-165
+method,T.test_parent_hub_follow_pulls_children,def test_parent_hub_follow_pulls_children(self),167-177
+method,T.test_untrusted_guard_blocks_breakout,def test_untrusted_guard_blocks_breakout(self),179-189
+method,T.test_untrusted_guard_avoids_collision,def test_untrusted_guard_avoids_collision(self),191-194
+method,T.test_linter_ignores_opaque_block_contents,def test_linter_ignores_opaque_block_contents(self),196-199
+method,T.test_untrusted_content_not_counted_as_rules_or_refs,def test_untrusted_content_not_counted_as_rules_or_refs(self),201-206
+method,T.test_session_dedup_stubs,def test_session_dedup_stubs(self),208-220
+method,T.test_session_dedup_follow_refs,def test_session_dedup_follow_refs(self),222-229
+method,T.test_table_render_modes,def test_table_render_modes(self),231-243
+method,T.test_anchored_table_echoes_header,def test_anchored_table_echoes_header(self),245-249
+method,T.test_json_conversion,def test_json_conversion(self),251-266
+method,T.test_json_empty_scalars_roundtrip,def test_json_empty_scalars_roundtrip(self),268-272
+method,T.test_json_newlines_stay_line_oriented,def test_json_newlines_stay_line_oriented(self),274-278
+method,T.test_from_payload_auto,def test_from_payload_auto(self),280-284
+method,T.test_roundtrip_all_documents,def test_roundtrip_all_documents(self),286-296
+method,T.test_v01_backward_compatibility,def test_v01_backward_compatibility(self),298-305
+method,T.test_identifier_splitting,def test_identifier_splitting(self),307-318
+method,T.test_hybrid_paraphrase_search,def test_hybrid_paraphrase_search(self),320-342
+method,T.test_trigram_typo_search,def test_trigram_typo_search(self),344-346
+method,T.test_from_repo_python_symbols_and_imports,def test_from_repo_python_symbols_and_imports(self),348-369
+method,T.test_from_repo_multi_language_symbols,def test_from_repo_multi_language_symbols(self),371-395
+method,T.test_from_repo_ignores_common_directories,def test_from_repo_ignores_common_directories(self),397-406
+method,T.test_from_repo_roundtrip_and_graph,def test_from_repo_roundtrip_and_graph(self),408-414
+method,T.test_remember_section_rule_kv_and_ref,def test_remember_section_rule_kv_and_ref(self),416-433
+method,T.test_remember_rejects_invalid_writes,def test_remember_rejects_invalid_writes(self),435-448
+method,T.test_remember_invalidates_session,def test_remember_invalidates_session(self),450-461
+method,T.test_pipe_auto_detection,def test_pipe_auto_detection(self),463-472
+method,T.test_pipe_log_dedup_and_untrusted_guard,def test_pipe_log_dedup_and_untrusted_guard(self),474-487
+method,T.test_pipe_budget_saves_artifact,def test_pipe_budget_saves_artifact(self),489-498
+method,T.test_init_plugin_merges_mcp_and_writes_repo,def test_init_plugin_merges_mcp_and_writes_repo(self),500-523
+method,T.test_hybrid_search_repo_symbols,def test_hybrid_search_repo_symbols(self),525-529
+method,T.test_mcp_tool_surface_and_repo,def test_mcp_tool_surface_and_repo(self),531-551
+method,T.test_slice_exact_lines_and_context,def test_slice_exact_lines_and_context(self),553-573
+method,T.test_slice_session_dedup_and_force,def test_slice_session_dedup_and_force(self),575-585
+method,T.test_slice_rejects_path_traversal,def test_slice_rejects_path_traversal(self),587-594
+method,T.test_sync_modified_updates_ranges_and_invalidates,def test_sync_modified_updates_ranges_and_invalidates(self),596-618
+method,T.test_sync_added_deleted_and_cleans_refs,def test_sync_added_deleted_and_cleans_refs(self),620-637
+method,T.test_sync_upgrades_old_repo_without_fingerprints,def test_sync_upgrades_old_repo_without_fingerprints(self),639-652
+method,T.test_impact_forward_reverse_and_symbol,def test_impact_forward_reverse_and_symbol(self),654-669
+method,T.test_impact_git_fallback_changed_symbols,def test_impact_git_fallback_changed_symbols(self),671-682
+method,T.test_hook_process_and_malformed,def test_hook_process_and_malformed(self),684-694
+method,T.test_hook_cli,def test_hook_cli(self),696-707
+method,T.test_init_plugin_hook_settings,def test_init_plugin_hook_settings(self),709-726
+method,T.test_pyproject_and_version_metadata,def test_pyproject_and_version_metadata(self),728-744
+method,T.test_mcp_slice_and_impact,def test_mcp_slice_and_impact(self),746-769
+method,T.test_mcp_auto_sync_on_get_and_slice,def test_mcp_auto_sync_on_get_and_slice(self),771-795
+function,_put,"def _put(root, name, text)",797-804
+function,_read,def _read(path),807-809
+function,_rows,"def _rows(doc, sid)",812-818
+class,_MCPClient,class _MCPClient,821-861
+method,_MCPClient.__init__,"def __init__(self, root)",822-828
+method,_MCPClient.request,"def request(self, method, params=None)",830-840
+method,_MCPClient.call,"def call(self, name, arguments)",842-845
+method,_MCPClient.close,def close(self),847-861
+class,Audit,class Audit(unittest.TestCase),864-1437
+method,Audit.test_guard_collision_fuzz,def test_guard_collision_fuzz(self),865-901
+method,Audit.test_path_traversal_and_symlinks,def test_path_traversal_and_symlinks(self),903-963
+method,Audit.test_parser_state_machine_robustness,def test_parser_state_machine_robustness(self),965-1016
+method,Audit.test_slice_boundaries_multilang,def test_slice_boundaries_multilang(self),1018-1145
+method,Audit.test_python_fallback_js_arrow_and_unreadable,def test_python_fallback_js_arrow_and_unreadable(self),1147-1179
+method,Audit.test_mcp_live_edit_and_session_eviction,def test_mcp_live_edit_and_session_eviction(self),1181-1265
+method,Audit.test_pipe_hook_stress_and_budget,def test_pipe_hook_stress_and_budget(self),1267-1314
+method,Audit.test_impact_git_subdir_and_sync_edges,def test_impact_git_subdir_and_sync_edges(self),1316-1365
+method,Audit.test_polyglot_track_h,def test_polyglot_track_h(self),1367-1401
+method,Audit.test_blind_retrieval_track_i,def test_blind_retrieval_track_i(self),1403-1421
+method,Audit.test_ranking_priors,def test_ranking_priors(self),1423-1437
+> src-tier-__init__.py
+> src-tier-mcp-__init__.py
+> src-tier-mcp-server.py

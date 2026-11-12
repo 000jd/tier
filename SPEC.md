@@ -1,0 +1,345 @@
+# TIER v1.0.0
+
+TIER (Tiered Information for Efficient Retrieval) is a line-oriented text format plus a local context, memory, and code-navigation engine for AI agents. File extension: `.tier`. Encoding: UTF-8, LF line endings. The reference implementation is a Python 3.9+ package in a `src/` layout and uses the standard library only.
+
+## Package layout
+
+The installable package lives under `src/tier/`: `models.py` (dataclasses, constants, path/IO helpers), `parser.py` (line parser, nodes, serializer, untrusted guards), `converter.py` (Markdown/JSON), `retrieval.py` (index, hybrid search, get, session cache), `repo.py` (polyglot repo maps, sync, L3 slices, impact), `memory.py`, `pipe.py`, `lint.py`, `tokens.py`, `plugin.py`, `installer.py` (interactive setup and safe config merging), `doctor.py` (health checks), `ui.py` (ANSI/rich rendering), `cli.py`, `mcp/server.py`, and the optional `mcp/sdk_server.py`. `tests/` holds the unit and red-team suite; `benchmarks/` holds Tracks A-I and the optional Node token counter; `examples/` holds sample documents.
+
+## Design rationale
+
+These points come from the research behind the design. Sources are listed at the end.
+
+1. No single syntax wins everywhere. Formatting changes model accuracy, and the effect depends on the model and the task. Larger models are more robust to it. So TIER does not pick one syntax: prose stays prose, uniform records become a header-once table, and trees become indented key/value lines.
+2. Syntax overhead is real but second order. Markdown uses roughly a third fewer tokens than JSON on nested data, and header-once tables cut repeated-field overhead further. TIER matches the best of these and does not beat them on raw syntax. Measured results are in the README.
+3. The biggest saving is loading less. Agent Skills load a short description first and the full body only on demand, and ObjectGraph argues the same case for documents. TIER makes this the core: every doc has an always-loadable L0 index, and sections are fetched by id.
+4. Constraining model output hurts reasoning. TIER is an input and context format. Let the model reason in free text and structure only the final answer.
+5. Instructions and data must be separable. Text fetched from outside is wrapped in an untrusted block so an agent can treat it as data, not commands.
+6. Boundaries must be non-escapable. A delimiter that external content can reproduce is not a boundary. Untrusted blocks support named guards, and the reference writer never emits a guard that occurs in the payload.
+7. Retrieval state belongs to the session. Progressive disclosure only pays off if repeated questions do not pull the same section body or code slice into context again.
+8. Code navigation needs signatures, edges, and exact implementations. Agents should see module purpose, symbols, line ranges, and local dependencies before reading any implementation, then read only the lines they need.
+9. Live edits invalidate indexes. Per-file fingerprints let a repository map refresh only changed modules and evict stale session entries.
+10. Changes have a blast radius. A reverse dependency graph answers what must be re-tested after an edit.
+11. Agent memory must survive compaction. Verified rules, decisions, and state belong in a small write-back store.
+12. Tool output is context too. Hooks and pipes should compress logs and large responses before they enter the reasoning loop.
+
+## Layers
+
+| Layer | Contents | When an agent reads it |
+|---|---|---|
+| L0 | title, summary, global rules, section index | always, a few hundred tokens |
+| L1 | one-line abstract per section (shown in the index) | always, as part of the index |
+| L2 | symbol signature tables, key/value metadata, `>` dependency edges | on demand, by module |
+| L3 | exact source lines for one named symbol | surgically, by symbol |
+
+## Line kinds
+
+A line is classified by its first character. One line is one unit: do not hard-wrap paragraphs. Blank lines and `;` comment lines are ignored.
+
+| Sigil | Meaning | Example |
+|---|---|---|
+| `%` | header: `tier`, `title`, `sum`, `rule`, or any other key | `%sum Runbook for the payments API` |
+| `@` | start a section: `@id Title` (id is lowercase letters, digits, `-`, `_`, `.`) | `@rollback Rolling back` |
+| `?` | abstract for the section, must be the first line after `@`; say when to read it | `? Undo a bad deploy; read if error rate spikes` |
+| `!` | rule: an imperative the agent must follow | `! Never deploy on Fridays` |
+| `=` | key/value; indented child lines (2 spaces per level) form a tree | `= db` then `  pool 40` |
+| `\|` | table: `\|name[N]{col,col}` followed by exactly N CSV rows | `\|envs[2]{name,region}` |
+| `>` | reference to another section id, with an optional note | `> rollback if canary fails` |
+| `$` | a single shell command | `$ deployctl rollback app` |
+| `<<<` ... `>>>` | untrusted data block; an optional `#guard` makes the close line `>>>guard` | `<<<web:example.com #g1` |
+| ``` | fenced code, verbatim until the closing fence | |
+| `;` | comment, dropped by the parser | `; internal note` |
+| anything else | prose | |
+
+Escape: a prose line that must start with a sigil character is prefixed with `\`.
+
+### Untrusted blocks
+
+The v0.1 form remains valid: `<<<source` opens a data block, and the first line starting with `>>>` closes it.
+
+Named guards are the safe form. `<<<source #g1` opens a block that closes only at a line equal to `>>>g1`. Any embedded `>>>`, rule sigil, section header, or table row inside the block is opaque data. Use `tier.wrap_untrusted(source, text)` to wrap arbitrary external text; it picks a deterministic guard such as `g1`, `g2` that does not appear as a closing line in the payload.
+
+### Tables
+
+On disk, tables stay compact: one header line plus exactly N CSV rows. Values containing a comma or a double quote use CSV quoting. The declared row count `N` lets a parser detect truncation and lets an agent verify it has seen every row.
+
+A parser must survive malformed tables: a count larger than the remaining file is capped safely and reported by `lint`, NUL bytes become U+FFFD instead of crashing the CSV reader, and unbalanced quotes are lint errors. CRLF is normalized to LF, a leading UTF-8 BOM is ignored, and the phantom field after a trailing newline is not treated as a table row.
+
+For retrieval, agents can request a rendered table without changing the stored file. `aligned` emits a spaced Markdown pipe table. `anchored` emits a table header, one row per record with a primary-key anchor and per-cell column labels, and repeats the column list every 20 rows on long tables. The default `raw` mode returns the stored representation.
+
+A key/value block ends at the first line that is not indented. All scalars are strings; the format does no type coercion.
+
+## Document shape
+
+```
+%tier 1.0.0
+%title Payments API Runbook
+%sum Deploying, operating, and debugging the payments API
+%rule Never log card numbers
+@common-failures Common failures
+? subtopics: Processor timeouts, Duplicate charges
+> processor-timeouts Processor timeouts
+> duplicate-charges Duplicate charges
+@processor-timeouts Processor timeouts
+? Timeouts arrive in bursts; read when processor latency spikes
+Check the processor status page first.
+@duplicate-charges Duplicate charges
+? Idempotency keys were lost; read when the ledger shows duplicates
+Enable the kill switch.
+```
+
+Text before the first `@` belongs to an implicit section with id `_`.
+
+## Heading hierarchy
+
+A Markdown heading of level 2 through 6 becomes a section. The converter tracks the open heading stack. When a heading has nested child headings, the converter appends a `>` reference line for each direct child to the parent section. A parent with no paragraph of its own is therefore still a navigable hub: fetching it with reference-following enabled pulls its children, and its synthesized abstract lists the child topics.
+
+No heading-only section is deleted while it still has children. Empty leaf headings are pruned, together with any reference lines that point at them.
+
+## Retrieval protocol
+
+Any agent can use a TIER doc with four operations, which the reference tools implement as a CLI and as an MCP server:
+
+1. `index`: return L0 plus the section index. Each index line is `@id ~Nt !R abstract`, where `Nt` is the section's approximate token cost and `R` is its rule count, shown only if above zero.
+2. `find`: hybrid search that returns the best section ids.
+3. `get`: return the text of the named sections, optionally with their `>` references one hop out.
+4. `slice`: return exact source lines for named symbols from a repository map.
+
+### Hybrid search
+
+`find` splits camelCase, PascalCase, snake_case, and kebab-case identifiers into composite and constituent terms. It combines BM25-style term scoring with a compact operations/development synonym map and a character-trigram fallback over titles, abstracts, and rules. Table rows receive an additional field-retrieval boost. Title and abstract matches outweigh body matches, and two navigation priors keep routing honest: test modules are down-weighted unless the query mentions tests, and "table of contents"/"contents" sections are down-weighted for content queries. Exact-prefix v0.2 behavior remains available as `find(..., legacy=True)` for comparison.
+
+### Table rendering
+
+`get` accepts `--table raw|aligned|anchored` on the CLI, `table_mode=` in the Python API, and `table_format` in the MCP server. Rendering is applied only to the fetched text; `.tier` files and token costs in the index are unchanged.
+
+### Session deduplication
+
+`tier.Session` records the `[document, section]` pairs already emitted in a conversation. A second fetch returns a one-line `@id (already in context; not resent)` stub instead of the body. `force=True` re-sends the body, `reset()` clears the cache for one document or the whole session, and `invalidate()` forgets one section plus all of its `section#symbol` L3 slices. The MCP `tier_get` and `tier_slice` tools share this cache.
+
+### Context compression
+
+`tier compress` reads Markdown or JSON from a file or stdin and emits TIER or just its L0 index. The MCP `tier_ingest` tool does the same for a string payload and also auto-detects logs. JSON conversion turns arrays of flat objects into header-once tables, nested objects into key/value trees, and scalars into metadata or prose.
+
+## Codebase maps
+
+`tier from-repo PATH` scans a repository and emits a layered architecture map:
+
+- Ignore rules skip hidden directories, virtual environments, `node_modules`, build output, caches, and `vendor`. Symbolic links are not followed, so a map can never read outside the scanned root.
+- Each source file becomes a section whose title is its relative path. The abstract contains the module docstring or leading comment plus top exported symbols and, for class-heavy modules, a method count.
+- Python symbols come from the built-in `ast` module and include decorator lines in each symbol's start range, so `slice` returns the complete decorated definition. JavaScript, TypeScript, Go, and Rust symbols come from regex extractors with a brace matcher that ignores braces inside strings, template literals, and comments; multi-line signatures, arrow-function bodies, and Rust lifetimes are handled.
+- Each section body has a `= file` tree and a `|symbols[N]{kind,name,signature,lines}` table with exact start and end lines.
+- The `= file` tree records `path`, `language`, `lines`, `sha256`, `mtime`, and `size`, so the map can be synchronized incrementally.
+- Local Python imports, relative JS/TS imports, Go imports resolved through `go.mod`, Rust `mod` declarations, and Rust `use crate::`/`use self::` module paths become `>` reference lines to target module sections. Trait method declarations are recorded without swallowing the following `impl` block, and `impl Trait for Type` methods are attributed to `Type`.
+
+Because dependencies are references, `tier_get repo.tier <module> --follow` returns that module's signatures plus the signatures of its direct local dependencies in one hop. The MCP `tier_repo` tool performs the same scan inside the configured root.
+
+## L3 surgical slices
+
+`tier slice repo.tier MODULE SYMBOL...` reads only the recorded lines for each symbol from the underlying source file:
+
+```
+$ tier slice repo.tier src/tier/parser.py parse
+@src-tier-parser.py#parse [L43-L111]
+```python
+def parse(text: str) -> Doc:
+    ...
+```
+```
+
+`MODULE` may be a section id or a relative file path. Symbols may be top-level functions, classes, or methods such as `Doc.by_id`. `--context N` pads the line range. `--root` sets the source-tree root; the default is the directory containing `repo.tier`. The resolved path must remain inside that root, so `..` traversal, absolute paths, null bytes, and symlinks that resolve outside the root are rejected. Symbol ranges include Python decorators and multi-line signatures, so a slice never starts in the middle of a decorated definition. The MCP `tier_slice` tool exposes the same operation, supports multi-symbol batches, and deduplicates already-served slices through `Session`.
+
+## Incremental sync
+
+`tier sync repo.tier` compares the current files on disk with each `= file` fingerprint:
+
+- Changed files are re-parsed and their sections and symbol line ranges are replaced.
+- New files become new sections; deleted files lose their sections and incoming reference lines.
+- When the file set changes, dependency edges of unchanged modules are re-resolved, so a newly added import target gains its `>` edge and a deleted one loses it. Unchanged module bodies are still preserved.
+- Unchanged modules keep their existing section bodies.
+- Changed and deleted section ids are evicted from the active `Session`, including all `section#symbol` L3 slice entries.
+- `%sum` is refreshed with the current file count, languages, and entrypoints.
+
+`tier.sync_repo()` returns changed, added, deleted, and unchanged lists. Writing is atomic and skipped when nothing changed. The MCP server auto-syncs a repository map before `tier_index`, `tier_find`, `tier_get`, and `tier_slice`, and exposes `tier_sync` explicitly.
+
+## Impact analysis
+
+`tier impact repo.tier TARGET` inverts the `>` graph:
+
+- Direct dependents: sections that reference the target.
+- Transitive dependents: all upstream callers and importers.
+- Direct and transitive dependencies: everything the target depends on.
+- `--git`: inspects `git status --porcelain` and compares the old symbol table with the current file to report changed modules, added/removed/changed symbols, and every downstream module that should be re-tested. If Git is unavailable, it falls back to fingerprint comparison against `repo.tier`.
+
+`TARGET` may be a section id, relative file path, `module#symbol`, or a unique symbol name. The MCP `tier_impact` tool returns the same report.
+
+## Agent memory
+
+`tier remember FILE` turns TIER into a write-back memory store. The MCP `tier_remember` tool exposes the same operations.
+
+| Action | CLI | Effect |
+|---|---|---|
+| global rule | `--rule TEXT` | append a `%rule` |
+| section upsert | `--section ID --title T --abstract A --body LINE` | create or replace a section |
+| append rule | `--section ID --append-rule TEXT` | append a `!` line |
+| append key | `--section ID --key KEY VALUE` | upsert a top-level `=` entry |
+| append reference | `--section ID --ref TARGET --note TEXT` | append a `>` edge |
+
+Writes are validated in memory, dumped, parsed again, round-trip checked, and linted before an atomic replace. A write with a dangling reference, malformed table, or structural injection is rejected and the original file is left untouched. The MCP server invalidates the changed section in its session cache.
+
+## Stream and log compression
+
+`tier pipe` reads stdin and auto-detects JSON, Markdown, or raw log/command output.
+
+- JSON object arrays become header-once tables and nested objects become key/value trees.
+- Markdown uses `from-md`.
+- Log lines are normalized into shapes so repeated or near-identical lines collapse into count annotations. Error and warning lines go to an `@errors` section, command lines to `@commands`, and the remaining raw excerpt is wrapped in a collision-safe `<<<stream #guard ... >>>guard` block.
+- `--max-tokens N` caps the output: the command emits the L0 index plus the highest-priority sections that fit, saves the full `.tier` artifact to `--out` or a temporary file, and names the artifact so remaining sections can be fetched later. The artifact path is always emitted, so a budget below the path's own token cost is best-effort; otherwise the result fits the cap.
+
+The MCP `tier_ingest` tool accepts Markdown, JSON, logs, `max_tokens`, and `save_as` for the same workflow.
+
+## Native agent hooks
+
+`tier hook` reads a JSON payload from stdin, suitable for Claude Code `PostToolUse` or a generic tool-output wrapper. It finds the largest text field in `tool_response`, `tool_input`, `stdout`, `stderr`, `content`, or nested variants. If that field exceeds `--max-tokens`, the hook compresses it with the pipe engine and returns:
+
+```json
+{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "TIER compressed ..."}}
+```
+
+Small payloads return `{"continue": true}`. Malformed JSON is treated as a raw tool-response string, so the hook never crashes; a short malformed payload simply continues.
+
+## Agent plugin bootstrap
+
+`tier init-plugin TARGET` configures a project in one step:
+
+1. Safely merges a `tier` server entry into `TARGET/.mcp.json` without removing other servers. The entry runs `python -m tier.mcp` with the target directory as its root.
+2. Generates `TARGET/repo.tier` with `from-repo`, including per-file fingerprints.
+3. With `--convert-docs`, converts top-level `README.md` and `CONTRIBUTING.md` into `.tier` documents.
+4. Prints a compact instruction block containing the L0 repository index and routing rules for `tier_list`, `tier_index`, `tier_find`, `tier_get`, `tier_slice`, and `tier_remember`. With `--write-instructions claude|agents|both`, the block is merged into `CLAUDE.md` or `AGENTS.md` between stable `TIER:BEGIN` / `TIER:END` markers.
+5. With `--hook`, merges a `PostToolUse` compression command into `TARGET/.claude/settings.json`, preserving existing hooks and avoiding duplicates.
+
+## Interactive installer
+
+`tier install` (alias `tier setup`) is a cross-platform installer for Claude Code (project and user), Claude Desktop, Cursor (project and global), VS Code, and Windsurf. It detects existing config files, displays a numbered multi-select, and supports non-interactive `--clients`, `--yes`, `--dry-run`, and `--uninstall` modes. `--dry-run` prints unified diffs and never touches disk.
+
+Client config paths are platform-aware: Claude Desktop uses `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `~/.config/Claude/claude_desktop_config.json` on Linux, and `%APPDATA%\Claude\claude_desktop_config.json` on Windows. Claude Code project config is `.mcp.json` plus `.claude/settings.json`; the user config is `~/.claude.json` plus `~/.claude/settings.json`. Cursor uses `.cursor/mcp.json` or `~/.cursor/mcp.json`; VS Code uses `.vscode/mcp.json` with a `servers` key and `type: stdio`; Windsurf uses `~/.codeium/windsurf/mcp_config.json`.
+
+The installer prefers an absolute `tier-mcp` executable and otherwise uses the absolute current interpreter with `-m tier.mcp`. Before modifying any existing JSON file it creates `<file>.bak` and writes atomically. Unrelated servers, keys, hooks, and instruction blocks are preserved; repeated installs are idempotent. `--uninstall` removes only the `tier` entry, TIER hook commands, and TIER instruction blocks. When `repo.tier` is generated or synced, the summary reports raw-source tokens, L0 tokens, and the measured percentage.
+
+## Diagnostics
+
+`tier doctor [ROOT]` checks Python version, `tier`/`tier-mcp` entrypoints, optional Node/`gpt-tokenizer` availability, the target directory, `repo.tier` presence, lint errors, sync freshness, detected client configs (command and root validity), TIER hooks, and the optional `mcp` extra. It renders a PASS/WARN/FAIL table; `--json` emits machine-readable checks. The exit code is nonzero only when a check fails.
+
+## Optional official SDK adapter
+
+`pip install "tier[mcp]"` enables `tier-mcp-sdk` and `python -m tier.mcp.sdk_server`. The adapter wraps all 11 tools with the official SDK's v2 `MCPServer` (falling back to v1 `FastMCP`). It supports `--transport stdio`, `--transport streamable-http --host HOST --port PORT`, and `mcp dev` via the module-level `mcp`/`server` object. If the extra is missing, it prints the exact install command and exits nonzero without a traceback. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib implementation.
+
+## Packaging
+
+`pyproject.toml` declares the standard-library package at version `1.0.0` with no required third-party dependencies and three console scripts:
+
+| Command | Entry point |
+|---|---|
+| `tier` | `tier.cli:main` |
+| `tier-mcp` | `tier.mcp.server:main` |
+| `tier-mcp-sdk` | `tier.mcp.sdk_server:main` |
+
+Optional extras: `ui = ["rich>=13.0"]` for rich terminal rendering, `mcp = ["mcp>=2.0"]` for the official SDK adapter, and `all` for both. The default install remains stdlib-only.
+
+`pyproject.toml` uses the PEP 621 `src` layout and packages only `src/tier` (plus `src/tier/mcp`); tests, benchmarks, corpus data, and `node_modules` are not bundled. Install locally with `python3 -m pip install .`, `pip install -e . --no-build-isolation`, `pipx install .`, or a `uv` equivalent. `benchmarks/count.mjs` via Node remains optional for exact `o200k_base` counts; without it, including in an installed wheel, TIER uses a character estimate.
+
+## CLI
+
+The `tier` console script and `python -m tier` are equivalent.
+
+| Command | Purpose |
+|---|---|
+| `index`, `find`, `get`, `slice`, `lint`, `build`, `stats` | document retrieval, L3 slicing, and validation |
+| `from-md`, `to-md`, `to-json`, `compress` | format conversion |
+| `from-repo`, `sync` | repository architecture, dependency graph, and incremental refresh |
+| `impact` | reverse dependency and blast-radius analysis |
+| `remember` | persistent memory write-back |
+| `pipe`, `hook` | stream/log compression and native hook mode |
+| `init-plugin` | one-command MCP, repo map, instructions, and hook setup |
+| `install`, `setup` | interactive/non-interactive MCP client installer |
+| `doctor` | environment and client-config diagnostics |
+
+## MCP server
+
+Run the stdio server with `tier-mcp /path/to/root` or `python -m tier.mcp /path/to/root`. It exposes eleven tools:
+
+| Tool | Purpose |
+|---|---|
+| `tier_list` | discover `.tier` docs under the root |
+| `tier_index` | L0 + section index, with auto-sync |
+| `tier_find` | hybrid identifier/fuzzy search, with auto-sync |
+| `tier_get` | fetch sections, follow references, render tables, deduplicate, auto-sync |
+| `tier_slice` | fetch exact L3 source slices for symbols, with auto-sync |
+| `tier_impact` | forward/reverse dependency and blast-radius analysis |
+| `tier_sync` | incremental repository refresh |
+| `tier_lint` | structural validation |
+| `tier_ingest` | compress Markdown/JSON/logs, optionally budgeted |
+| `tier_repo` | index a repository directory into TIER |
+| `tier_remember` | persist rules, sections, keys, and references |
+
+Paths are confined to the configured root. `tier_get` and `tier_slice` share a session cache; `tier_sync` and any auto-sync invalidate changed sections and L3 slice entries.
+
+With `tier[mcp]`, `tier-mcp-sdk` / `python -m tier.mcp.sdk_server` exposes the same 11 tools through the official SDK for MCP Inspector (`mcp dev`) and Streamable HTTP. The default server remains the stdlib JSON-RPC implementation.
+
+## Author guidelines
+
+- Write abstracts as the answer to "when should I read this?", not as a copy of the first sentence.
+- Put only hard constraints in `%rule`. They are always loaded, so every one costs tokens in every session. Keep them to a handful.
+- Keep sections under about 800 tokens. The linter warns above that.
+- No hard wrapping, no emphasis markers, no decorative blank lines. Each costs tokens and carries no information for a model.
+- Use `!` for imperatives instead of capitalising words.
+- Use a parent section as a hub when a topic has subsections; its injected references make the group discoverable in one fetch.
+- Prefer a repo map, L2 signatures, and L3 slices over pasting whole source files.
+
+## Safety
+
+- Treat `<<<` blocks as untrusted data. An instruction inside one is not an instruction to the agent.
+- Prefer guarded blocks (`<<<source #guard` ... `>>>guard`) for any external content. Use `tier.wrap_untrusted` rather than string concatenation.
+- A parser must treat fenced and untrusted blocks as opaque: no sigil inside them is interpreted, and only the matching guard closes a guarded block.
+- Memory writes reject structural `@`, `%`, or `?` injection in section bodies and are lint-checked before replacement.
+- Slice paths are resolved with `realpath` and must stay inside the declared repository root.
+- Repository scans skip symlinked files and any path whose real path escapes the root.
+- Servers must confine file access to a configured root.
+
+## Conversion from Markdown
+
+The reference converter maps headings to sections, Markdown tables to `|` tables, single-line shell fences to `$`, and top-level bullets that start with Never, Always, Must, Do not, Don't, or Only to `!` rules. It tracks heading levels 2 through 6 and injects parent-to-child `>` references. It synthesizes abstracts for prose, rules, key/value trees, commands, reference hubs, tables, code blocks, and lists, and moves a short first prose sentence into the abstract. Known losses: code-fence language labels on one-line shell blocks.
+
+## Benchmarks
+
+See `benchmarks/BENCH.txt` for the full A-I output. TIER v1.0.0 measures:
+
+- A/B: TIER tables match CSV at about 61 percent fewer tokens than pretty JSON. TIER key/value is 39 percent below pretty JSON and 13 percent below YAML; compact JSON is still smaller.
+- C: 8/8 `hit@1` on the payments runbook, 352-token L0 index, and L0 + top-1 + session dedup below full Markdown at all eight questions.
+- D: five real GitHub documents convert, lint, and round-trip cleanly, with 99.2-100% word recall.
+- E: paraphrase retrieval improves from 7/10 with the v0.2 exact-prefix matcher to 10/10 with hybrid search.
+- F: raw `src/tier` source is 49,725 tokens, full `repo.tier` is 7,200 tokens (86 percent fewer), and L0 plus a `parser.py` one-hop fetch is 1,460 tokens (97 percent fewer), preserving 203/203 symbols and 75 internal dependency edges with 0 lint errors.
+- G: the five-step 4-layer workflow costs 4,441 tokens versus 49,725 raw-source tokens, a 91.1 percent saving. It retrieves 3/3 exact L3 slices, finds 10/10 expected dependents, and verifies incremental sync after a simulated edit.
+- H: a 36-file Python/TypeScript/Go/Rust fixture preserves 116/116 symbols with 116/116 accurate ranges and 10/10 cross-file edges; L0 + target L2 + seven L3 slices costs 2,854 tokens versus 8,249 raw-source tokens (65 percent fewer).
+- Self-index: the checked-in `repo.tier` maps 24 source files (20 package modules plus two test files, the benchmark runner, and the JS token counter) in 11,034 tokens; its L0 index is 893 tokens (8 percent).
+- I: a 197-section merged corpus returns 15/15 `hit@1` and 15/15 `hit@2` on 15 mixed queries; the mean top-1 fetch is 134 tokens, and L0 + top-1 averages 6,039 tokens versus 52,275 for full-corpus loading (88 percent fewer).
+
+## Backward compatibility
+
+TIER v1.0.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.0.0`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable.
+
+## Non-goals
+
+TIER is not a replacement for JSON as a wire format or for databases. It does not define a schema language, and it does not claim to improve answer accuracy: that must be measured per model and task. The JS/TS/Go/Rust symbol extractors are lightweight regex scanners, not full language parsers.
+
+## Sources
+
+- He et al., "Does Prompt Formatting Have Any Impact on LLM Performance?" (arXiv 2411.10541): format changes swing accuracy, up to about 40 percent on GPT-3.5 for some tasks, and larger models are steadier.
+- ImprovingAgents, "Which Nested Data Format Do LLMs Understand Best?": Markdown was the most token-efficient, YAML did best on nested-data accuracy for two of three models, XML did worst.
+- ImprovingAgents, "Best Input Data Format for LLMs" table benchmark: raw CSV scored 44.3 percent, Markdown-KV 60.7 percent, Markdown tables 51.9 percent.
+- "Notation Matters: Agentic Tool-Calling Benchmark" (arXiv 2605.29676v2): input compression cuts tokens, and missing boundary guards allow untrusted content to be reparsed as structure.
+- Tam et al., "Let Me Speak Freely?" (arXiv 2408.02442): stricter output format constraints degrade reasoning.
+- TOON (Token-Oriented Object Notation): header-once tabular arrays for LLM input.
+- Dubey, "ObjectGraph" (arXiv 2604.27820): documents as traversable graphs with progressive disclosure. Its reported 95 percent token reduction is the paper's own claim and was not independently verified here.
+- Agent Skills / SKILL.md: name and description load at startup, the body loads on demand.
+- FileConcat, llms.txt, and Anthropic prompting guidance: explicit start and stop boundary markers prevent section bleeding at a small wrapper cost.

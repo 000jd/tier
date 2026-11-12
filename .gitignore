@@ -1,0 +1,39 @@
+# Python caches and packaging
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+coverage.xml
+htmlcov/
+
+# Benchmark / Node artifacts
+node_modules/
+benchmarks/node_modules/
+corpus/
+benchmarks/corpus/
+
+# Local IDE / OS / editor clutter
+.DS_Store
+Thumbs.db
+.idea/
+.claude/settings.local.json
+*.bak
+
+# Temporary TIER artifacts
+tier-pipe-*.tier
+.tier-*.tmp
+*.tier.tmp

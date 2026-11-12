@@ -1,0 +1,10 @@
+{
+  "name": "tier",
+  "version": "1.0.0",
+  "description": "TIER token counter helper",
+  "dependencies": {
+    "gpt-tokenizer": "^4.1.2"
+  },
+  "private": true,
+  "type": "module"
+}

@@ -1,0 +1,95 @@
+%tier 1.0.0
+%title Payments API Runbook
+%sum This runbook covers deploying, operating, and debugging the Payments API, the service that authorizes card payments and writes ledger entries for the checkout flow.
+@overview Overview
+? The Payments API is a stateless Go service fronted by an internal load balancer.
+It talks to the card processor over mTLS, writes every authorization to the ledger database, and publishes settlement events to the `payments.settled` Kafka topic. It is owned by the Payments Platform team and is tier-1: an outage blocks all checkout traffic.
+@architecture Architecture
+? Requests enter through the API gateway, which handles authentication and rate limiting.
+The Payments API validates the request, calls the card processor, then writes to Postgres in a single transaction. A separate worker, `settle-worker`, drains the outbox table and publishes events. Redis is used only for idempotency keys with a 24 hour TTL.
+\> Note: the processor sandbox is shared across all teams and is frequently slow. Do not treat sandbox latency as a regression.
+@environments Environments
+? table: Environment,Region,URL,Replicas,Deploy policy
+|environments[4]{Environment,Region,URL,Replicas,Deploy policy}
+dev,us-east-1,https://payments.dev.internal,2,auto on merge
+staging,us-east-1,https://payments.stg.internal,4,auto on tag
+prod-us,us-east-1,https://payments.internal,12,manual approval
+prod-eu,eu-west-1,https://payments.eu.internal,8,manual approval
+@deploying Deploying
+? Deploys to production are done by the on-call engineer or a release captain.
+A deploy takes about 15 minutes end to end, including the canary.
+1. Confirm CI is green on the release tag and that the staging soak has run for at least 30 minutes.
+2. Post in #payments-releases with the tag and a link to the changelog.
+3. Start the canary at 5 percent traffic:
+$ deployctl canary payments-api --tag v2.41.0 --percent 5
+4. Watch the canary dashboard for 10 minutes. Error rate must stay below 0.1 percent and p99 latency below 450 ms.
+5. Promote to 100 percent:
+$ deployctl promote payments-api --tag v2.41.0
+6. Repeat for prod-eu after prod-us has been healthy for 30 minutes.
+Always deploy prod-us before prod-eu. Never deploy on Fridays after 14:00 UTC or during a declared incident without approval from the incident commander.
+@rolling-back Rolling back
+? If the canary or the full rollout breaks the error budget, roll back immediately and investigate afterwards.
+Rollbacks are safe because the service is stateless and database migrations are backward compatible for one release.
+$ deployctl rollback payments-api --to previous
+After rolling back, post in #payments-incidents, open an incident if customer impact lasted more than 5 minutes, and do not retry the deploy until the cause is understood. If the bad release included a migration, check the migrations section before the next attempt.
+@migrations Migrations
+? Schema changes ship separately from code.
+A migration must be backward compatible with the previous release, because during a rollout both versions run at once. Add columns as nullable, backfill in batches, and only then add constraints in a later release.
+! Never drop a column in the same release that stops using it.
+! Never run a migration that takes a table lock for more than 2 seconds in prod.
+! Always run the migration against a copy of staging data first.
+```yaml
+migration:
+  lock_timeout: 2s
+  batch_size: 5000
+  sleep_between_batches: 200ms
+```
+@on-call-escalation On-call and escalation
+? The primary on-call is paged for any sev-1 or sev-2 alert.
+If the primary does not acknowledge within 10 minutes, the page escalates automatically.
+|on_call_escalation[4]{Level,Role,Contact,Ack deadline}
+1,Primary on-call,PagerDuty: payments-primary,10 min
+2,Secondary on-call,PagerDuty: payments-secondary,10 min
+3,Engineering manager,PagerDuty: payments-em,15 min
+4,Director of Payments,"phone, see the leadership roster",15 min
+@alerts Alerts
+? table: Alert,Threshold,Severity,First action
+|alerts[5]{Alert,Threshold,Severity,First action}
+HighErrorRate,5xx above 1 percent for 5 min,sev-1,"Check the canary, roll back if a deploy is in flight"
+HighLatencyP99,p99 above 800 ms for 10 min,sev-2,"Check processor status page, then DB connection saturation"
+LedgerWriteFailures,any failed ledger write,sev-1,"Page the database on-call immediately, stop deploys"
+OutboxLag,oldest outbox row older than 5 min,sev-2,Check settle-worker pods and Kafka broker health
+IdempotencyRedisDown,Redis unavailable for 2 min,sev-3,"Service degrades safely, but duplicate charges are possible, so enable the kill switch"
+@common-failures Common failures
+? subtopics: Processor timeouts, Database connection saturation, Duplicate charges
+> processor-timeouts Processor timeouts
+> database-connection Database connection saturation
+> duplicate-charges Duplicate charges
+@processor-timeouts Processor timeouts
+? Timeouts from the card processor usually come in bursts.
+Check the processor status page first. If the processor is degraded, enable the fallback route with the feature flag `payments.fallback_processor`, which sends traffic to the secondary processor at a higher fee. Tell finance when the fallback is enabled for more than 30 minutes.
+@database-connection Database connection saturation
+? Symptoms are rising p99 latency and `too many clients` errors in the logs.
+The pool is capped at 40 connections per replica. Do not raise the cap without checking the primary's `max_connections`. Scale replicas down before scaling up, because each replica holds a full pool.
+@duplicate-charges Duplicate charges
+? Duplicate charges indicate idempotency keys were lost, normally because Redis was flushed or unavailable.
+Enable the kill switch `payments.reject_without_idempotency`, then identify affected orders from the ledger and hand the list to the support team for refunds.
+@configuration Configuration
+? Configuration is read from environment variables and the shared config service.
+The important values are:
+- processor
+  - timeout_ms: 3000
+  - retries: 2
+  - mtls_cert: /etc/certs/processor.pem
+- database
+  - pool_size: 40
+  - statement_timeout: 5s
+- redis
+  - idempotency_ttl: 24h
+@security-rules Security rules
+? rules: Never log full card numbers, CVVs, or processor tokens. Mask all but the last four digits.; Never paste production ledger data into tickets, chat, or...
+! Never log full card numbers, CVVs, or processor tokens. Mask all but the last four digits.
+! Never paste production ledger data into tickets, chat, or external tools.
+! Always use the break-glass role for production database access, and note the ticket number.
+! Do not share the processor mTLS certificate outside the Payments Platform team.
+! Only the incident commander can approve a deploy during a declared incident.
