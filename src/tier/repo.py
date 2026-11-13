@@ -879,8 +879,29 @@ def sync_repo(path: str, root: str = None, session: Session = None,
     files = repo_source_files(root)
     current = {}
     for rel, full, ext in files:
+        old = existing.get(rel)
+        meta = _repo_file_meta(old) if old else {}
+        try:
+            st = os.stat(full)
+            stat_mtime, stat_size = st.st_mtime_ns, st.st_size
+        except OSError:
+            stat_mtime, stat_size = 0, -1
+        if (
+            old is not None
+            and meta.get("sha256")
+            and str(meta.get("mtime", "")) == str(stat_mtime)
+            and str(meta.get("size", "")) == str(stat_size)
+        ):
+            current[rel] = {
+                "full": full, "ext": ext, "text": None, "sha256": meta["sha256"],
+                "unchanged": True,
+            }
+            continue
         text = _read_text(full)
-        current[rel] = {"full": full, "ext": ext, "text": text, "sha256": _sha256(text)}
+        current[rel] = {
+            "full": full, "ext": ext, "text": text, "sha256": _sha256(text),
+            "unchanged": False,
+        }
     rel_set = set(current)
     module_to_rel = {}
     for rel, item in current.items():
@@ -936,13 +957,17 @@ def sync_repo(path: str, root: str = None, session: Session = None,
             if not rel or rel in infos or rel not in current:
                 continue
             item = current[rel]
-            info = {"rel": rel, "ext": item["ext"], "text": item["text"], "raw_imports": []}
+            text = item["text"]
+            if text is None:
+                text = _read_text(item["full"])
+                item["text"] = text
+            info = {"rel": rel, "ext": item["ext"], "text": text, "raw_imports": []}
             if item["ext"] in (".py", ".pyi"):
                 try:
-                    ast.parse(item["text"])
+                    ast.parse(text)
                 except SyntaxError:
                     continue
-                info["raw_imports"] = _extract_symbols(rel, item["text"])[2]
+                info["raw_imports"] = _extract_symbols(rel, text)[2]
             _repo_add_deps(info, rel_set, module_to_rel, go_module)
             dep_ids = {rel_to_id[d] for d in info["deps"] if d in rel_to_id}
             body = [line for line in sec.lines if not line.startswith("> ")]

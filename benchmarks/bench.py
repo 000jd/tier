@@ -20,9 +20,10 @@ from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SRC = os.path.join(ROOT, "src", "tier")
-if SRC not in sys.path:
-    sys.path.insert(0, SRC)
+SRC = os.path.join(ROOT, "src", "tier")   # the package directory, what Tracks F/G index
+_SRC_PATH = os.path.join(ROOT, "src")     # importable src/ layout for a fresh clone
+if _SRC_PATH not in sys.path:
+    sys.path.insert(0, _SRC_PATH)
 
 import tier
 
@@ -30,6 +31,76 @@ try:
     import yaml
 except ImportError:
     yaml = None
+
+
+_NEEDS_QUOTE = re.compile(
+    r"""^(?:|true|false|null|yes|no|on|off|~|[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?|"""
+    r"""\d{4}-\d{1,2}-\d{1,2}(?:[Tt ].*)?)$""",
+    re.I,
+)
+
+
+def _yaml_scalar(value) -> str:
+    """Format one scalar the way PyYAML's default flow-block emitter would."""
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if value is None:
+        return "null"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    text = str(value)
+    if _NEEDS_QUOTE.match(text):
+        return "'" + text.replace("'", "''") + "'"
+    return text
+
+
+def _yaml_lines(value, indent: int = 0) -> list:
+    pad = "  " * indent
+    out = []
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if isinstance(v, (dict, list)) and v:
+                out.append(f"{pad}{k}:")
+                out += _yaml_lines(v, indent + 1)
+            elif isinstance(v, (dict, list)):
+                empty = "{}" if isinstance(v, dict) else "[]"
+                out.append(f"{pad}{k}: {empty}")
+            else:
+                out.append(f"{pad}{k}: {_yaml_scalar(v)}")
+        return out
+    if isinstance(value, list):
+        seq_pad = pad[:-2] if indent and pad.endswith("  ") else pad
+        for item in value:
+            if isinstance(item, dict) and item:
+                inner = seq_pad + "  "
+                first = True
+                for k, v in item.items():
+                    lead = f"{seq_pad}- " if first else inner
+                    first = False
+                    if isinstance(v, (dict, list)) and v:
+                        out.append(f"{lead}{k}:")
+                        out += _yaml_lines(v, indent + 2)
+                    elif isinstance(v, (dict, list)):
+                        empty = "{}" if isinstance(v, dict) else "[]"
+                        out.append(f"{lead}{k}: {empty}")
+                    else:
+                        out.append(f"{lead}{k}: {_yaml_scalar(v)}")
+            elif isinstance(item, list):
+                out.append(f"{seq_pad}-")
+                out += _yaml_lines(item, indent + 1)
+            else:
+                out.append(f"{seq_pad}- {_yaml_scalar(item)}")
+        return out
+    out.append(f"{pad}{_yaml_scalar(value)}")
+    return out
+
+
+def _yaml_dump(value) -> str:
+    if yaml is not None:
+        return yaml.safe_dump(value, sort_keys=False)
+    return "\n".join(_yaml_lines(value)) + "\n"
 
 OUT = []
 
@@ -81,8 +152,7 @@ def bench_records():
     f = {}
     f["JSON (pretty)"] = json.dumps({"orders": recs}, indent=2)
     f["JSON (compact)"] = json.dumps({"orders": recs}, separators=(",", ":"))
-    if yaml:
-        f["YAML"] = yaml.safe_dump({"orders": recs}, sort_keys=False)
+    f["YAML"] = _yaml_dump({"orders": recs})
     f["CSV"] = ",".join(cols) + "\n" + rows_csv()
     f["Markdown table"] = (
         "| " + " | ".join(cols) + " |\n|" + "---|" * len(cols) + "\n"
@@ -138,8 +208,7 @@ def bench_nested():
         return out
 
     f = {"JSON (pretty)": json.dumps(cfg, indent=2), "JSON (compact)": json.dumps(cfg, separators=(",", ":"))}
-    if yaml:
-        f["YAML"] = yaml.safe_dump(cfg, sort_keys=False)
+    f["YAML"] = _yaml_dump(cfg)
     f["TOON-style*"] = "\n".join(toon(cfg))
     f["TIER kv"] = "\n".join(tier_kv(cfg))
     # sanity: our kv parser must round-trip the structure (all scalars become strings)
@@ -1321,6 +1390,15 @@ def bench_blind_retrieval():
 
 
 if __name__ == "__main__":
+    js_modules = os.path.join(HERE, "node_modules")
+    if not os.path.isdir(js_modules) or not shutil.which("node"):
+        print(
+            "notice: benchmarks/node_modules or node is absent; using the deterministic "
+            "chars/4 token estimator instead of o200k BPE. Run `npm install` in benchmarks/ "
+            "for exact counts.\n"
+        )
+    if yaml is None:
+        print("notice: PyYAML is not installed; using the built-in stdlib YAML formatter.\n")
     be = tier.count_tokens(["x"])[1]
     say(f"tokenizer backend: {be}" + ("  (o200k_base BPE)" if be == "o200k" else "  (~chars/4 estimate!)"))
     say()

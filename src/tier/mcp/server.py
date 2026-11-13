@@ -19,11 +19,12 @@ Tools:
 import json
 import os
 import sys
+import time
 
 from ..lint import lint
 from ..memory import remember
 from ..models import Doc, VERSION, _atomic_write, _inside
-from ..parser import dumps, is_repo_doc, parse
+from ..parser import _repo_file_meta, dumps, is_repo_doc, parse
 from ..pipe import from_stream, pipe_compress
 from ..repo import from_repo, impact, render_impact, slice_symbols, sync_repo
 from ..retrieval import Session, find, index
@@ -33,6 +34,8 @@ ROOT = os.path.realpath(sys.argv[1] if len(sys.argv) > 1 else ".")
 PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {"2025-06-18", "2025-03-26", "2024-11-05"}
 SESSION = Session()
+AUTO_SYNC_TTL = float(os.environ.get("TIER_AUTO_SYNC_TTL", "1.5"))
+_SYNC_STATE = {}
 
 
 
@@ -217,8 +220,53 @@ def load(path: str) -> Doc:
         return parse(f.read())
 
 
+def _repo_signature(p: str, doc: Doc) -> dict:
+    """Cheap change detector: recorded file stats plus their directory stats."""
+    root = os.path.dirname(p)
+    files, dirs = {}, {}
+    for sec in doc.sections:
+        meta = _repo_file_meta(sec)
+        rel = meta.get("path") if meta else ""
+        if not rel:
+            continue
+        full = os.path.join(root, rel)
+        try:
+            st = os.stat(full)
+            files[rel] = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            files[rel] = None
+        parent = os.path.dirname(full)
+        try:
+            dirs[parent] = os.stat(parent).st_mtime_ns
+        except OSError:
+            dirs[parent] = None
+    return {"files": files, "dirs": dirs}
+
+
+def _signature_matches(sig: dict) -> bool:
+    for rel, expected in sig["files"].items():
+        try:
+            st = os.stat(rel if os.path.isabs(rel) else os.path.join(sig["root"], rel))
+        except OSError:
+            return False
+        if expected is None or (st.st_mtime_ns, st.st_size) != expected:
+            return False
+    for parent, expected in sig["dirs"].items():
+        try:
+            if os.stat(parent).st_mtime_ns != expected:
+                return False
+        except OSError:
+            return False
+    return True
+
+
 def _load_doc(path: str, auto_sync: bool = True):
     p = safe(path)
+    cached = _SYNC_STATE.get(p)
+    if auto_sync and cached and time.monotonic() - cached["at"] < AUTO_SYNC_TTL:
+        sig = cached["sig"]
+        if sig["root"] and _signature_matches(sig):
+            return p, cached["doc"]
     with open(p, encoding="utf-8") as f:
         doc = parse(f.read())
     if auto_sync and is_repo_doc(doc):
@@ -227,8 +275,15 @@ def _load_doc(path: str, auto_sync: bool = True):
                 p, root=os.path.dirname(p), session=SESSION, session_key=p, write=True
             )
             doc = res["doc"]
+            sig = _repo_signature(p, doc)
+            sig["root"] = os.path.dirname(p)
+            _SYNC_STATE[p] = {"doc": doc, "sig": sig, "at": time.monotonic()}
         except (OSError, ValueError):
             pass
+    elif is_repo_doc(doc):
+        sig = _repo_signature(p, doc)
+        sig["root"] = os.path.dirname(p)
+        _SYNC_STATE[p] = {"doc": doc, "sig": sig, "at": time.monotonic()}
     return p, doc
 
 
@@ -236,7 +291,7 @@ def call(name: str, a: dict) -> str:
     if not isinstance(a, dict):
         raise ValueError("arguments must be an object")
     if name == "tier_list":
-        rows = []
+        docs = []
         for dp, dirnames, fs in os.walk(ROOT):
             dirnames.sort()
             for f in sorted(fs):
@@ -247,11 +302,14 @@ def call(name: str, a: dict) -> str:
                     continue
                 rel = os.path.relpath(full, ROOT)
                 with open(full, encoding="utf-8", errors="replace") as fh:
-                    d = parse(fh.read())
-                toks = count_tokens([dumps(d)])[0][0]
-                t = d.meta.get("title", "")
-                sm = d.meta.get("sum", "")
-                rows.append(f"{rel} ~{toks}t {t}" + (f" - {sm}" if sm else ""))
+                    docs.append((rel, parse(fh.read())))
+        texts = [dumps(d) for _rel, d in docs]
+        counts = count_tokens(texts)[0] if texts else []
+        rows = []
+        for (rel, d), toks in zip(docs, counts):
+            t = d.meta.get("title", "")
+            sm = d.meta.get("sum", "")
+            rows.append(f"{rel} ~{toks}t {t}" + (f" - {sm}" if sm else ""))
         return "\n".join(rows) or "(no .tier docs found)"
     if name == "tier_index":
         _, d = _load_doc(a["path"])
@@ -295,6 +353,9 @@ def call(name: str, a: dict) -> str:
         res = sync_repo(
             path, root=os.path.dirname(path), session=SESSION, session_key=path, write=True
         )
+        sig = _repo_signature(path, res["doc"])
+        sig["root"] = os.path.dirname(path)
+        _SYNC_STATE[path] = {"doc": res["doc"], "sig": sig, "at": time.monotonic()}
         return (
             f"sync {path}: {len(res['changed'])} changed, {len(res['added'])} added, "
             f"{len(res['deleted'])} deleted, {res['unchanged']} unchanged"
@@ -334,6 +395,7 @@ def call(name: str, a: dict) -> str:
         )
         if res.get("section"):
             SESSION.invalidate(path, res["section"])
+        _SYNC_STATE.pop(path, None)
         return res["message"]
     raise ValueError(f"unknown tool {name}")
 

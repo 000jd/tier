@@ -5,8 +5,8 @@ import os
 import re
 
 from .models import (
-    Doc, Section, VERSION, SEC_RE, HDR_RE, TABLE_RE, DATA_OPEN_RE, TABLE_MODES, SIGIL_CHARS,
-    _csv_cells, _render_table, _table_rows, _table_count, render_lines,
+    Doc, Section, VERSION, SEC_RE, HDR_RE, TABLE_RE, TABLE_HEAD_RE, DATA_OPEN_RE, TABLE_MODES,
+    SIGIL_CHARS, _csv_cells, _render_table, _table_rows, _table_count, render_lines,
 )
 
 
@@ -46,15 +46,22 @@ def parse(text: str) -> Doc:
     mode = None  # None | "fence" | "data"
     mode_guard = ""
     pending = 0  # table rows still to consume verbatim (declared count is authoritative)
+    pending_capped = False  # declared count exceeded the remaining input
     body = text.lstrip("\ufeff").replace("\r\n", "\n")
     if body.endswith("\n"):
         body = body[:-1]
-    for n, raw in enumerate(body.split("\n"), 1):
+    raw_lines = body.split("\n")
+    for n, raw in enumerate(raw_lines, 1):
         line = raw.rstrip()
         if pending:
-            cur.lines.append(line)
-            pending -= 1
-            continue
+            if pending_capped and (SEC_RE.match(line) or HDR_RE.match(line)):
+                pending, pending_capped = 0, False
+            else:
+                cur.lines.append(line)
+                pending -= 1
+                if not pending:
+                    pending_capped = False
+                continue
         if mode == "fence":
             cur.lines.append(line)
             if line.startswith("```"):
@@ -103,7 +110,19 @@ def parse(text: str) -> Doc:
         cur.lines.append(line)
         tm = TABLE_RE.match(line)
         if tm:
-            pending = _table_count(tm.group(2))
+            declared = _table_count(tm.group(2))
+            remaining = len(raw_lines) - n
+            pending = min(declared, remaining)
+            pending_capped = declared > remaining
+            if pending_capped:
+                doc.warnings.append(
+                    f"line {n}: table '{tm.group(1)}' declares {declared} rows, "
+                    f"only {remaining} line(s) remain; capped to {remaining}"
+                )
+        elif TABLE_HEAD_RE.match(line):
+            doc.warnings.append(
+                f"line {n}: malformed table header (expected |name[N]{{cols}}); treated as prose"
+            )
     if mode:
         doc.warnings.append(f"unterminated {mode} block")
     if cur.id != "_" or cur.lines:

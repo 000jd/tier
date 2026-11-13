@@ -93,9 +93,9 @@ def run_doctor(root: str = ".", home: Optional[str] = None, env: Optional[dict] 
     find_executable = find_executable or shutil.which
     checks: List[Check] = []
 
-    ok_py = sys.version_info >= (3, 9)
+    ok_py = sys.version_info >= (3, 10)
     checks.append(Check("python", "PASS" if ok_py else "FAIL",
-                        f"{sys.version.split()[0]} (requires >=3.9)"))
+                        f"{sys.version.split()[0]} (requires >=3.10)"))
 
     tier_exe = find_executable("tier")
     mcp_exe = find_executable("tier-mcp")

@@ -1,6 +1,6 @@
 # TIER Architecture
 
-TIER is a four-layer context format plus a local retrieval, repository-graph, and agent-memory engine. The reference implementation is a Python 3.9+ `src/`-layout package with a **stdlib-only core**. Optional extras add terminal styling (`rich`) and the official MCP SDK adapter (`mcp`), but importing or running the core never requires them.
+TIER is a four-layer context format plus a local retrieval, repository-graph, and agent-memory engine. The reference implementation is a Python 3.10+ `src/`-layout package with a **stdlib-only core**. Optional extras add terminal styling (`rich`) and the official MCP SDK adapter (`mcp`), but importing or running the core never requires them.
 
 See [SPEC.md](SPEC.md) for the file format and retrieval rules.
 
@@ -22,7 +22,7 @@ src/tier/
 ├── __init__.py        public API re-exports
 ├── __main__.py        python -m tier
 ├── models.py          Section/Doc, constants, regexes, table rendering, atomic IO, path confinement
-├── tokens.py          optional Node o200k bridge; deterministic chars/4 fallback
+├── tokens.py          optional persistent Node o200k worker, content-hash cache, chars/4 fallback
 ├── parser.py          line parser, nodes, serializer, untrusted-block guards, repo metadata
 ├── lint.py            table/reference/size validation
 ├── converter.py       Markdown/JSON -> TIER, TIER -> Markdown
@@ -112,7 +112,7 @@ tier lint examples/payments-runbook.tier
 ### Invariants
 
 - **Zero required Python dependencies.** `pyproject.toml` keeps `dependencies = []`; `rich` and `mcp` are optional extras and must be imported lazily.
-- **Python 3.9+.** Avoid runtime syntax that requires 3.10 unless guarded.
+- **Python 3.10+.** Python 3.9 reached end of life in October 2025, and the official `mcp` SDK requires 3.10+.
 - **No import cycles.** Keep the one-way layers above and re-export public names from `tier/__init__.py`.
 - **Round-trip stability.** `dumps(parse(text))` must be stable for valid documents; malformed input must never raise an unhandled exception.
 - **Sandbox rules.** MCP paths, slices, repository scans, and memory writes must resolve inside the configured root; symlinks outside it are rejected.

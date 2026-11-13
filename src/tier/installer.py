@@ -308,11 +308,33 @@ def _remove_hook(path: str, dry_run: bool, changes: List[Change]) -> None:
     _save_json(path, data, dry_run, changes)
 
 
+def _marker_span(existing: str):
+    """Return (begin, end) offsets of a well-formed TIER block, or None.
+
+    A block is well-formed only when exactly one BEGIN precedes exactly one END
+    and nothing of either marker kind appears outside that span.
+    """
+    begins = existing.count(TIER_BEGIN)
+    ends = existing.count(TIER_END)
+    if begins != 1 or ends != 1:
+        return None
+    begin = existing.find(TIER_BEGIN)
+    end = existing.find(TIER_END)
+    if end < begin:
+        return None
+    return begin, end
+
+
+def markers_balanced(text: str) -> bool:
+    return _marker_span(text) is not None or (TIER_BEGIN not in text and TIER_END not in text)
+
+
 def _marked_text(existing: str, block: str) -> str:
     marked = f"{TIER_BEGIN}\n{block.rstrip()}\n{TIER_END}\n"
-    if TIER_BEGIN in existing and TIER_END in existing:
-        before = existing.split(TIER_BEGIN, 1)[0]
-        after = existing.split(TIER_END, 1)[1]
+    span = _marker_span(existing)
+    if span is not None:
+        before = existing[: span[0]]
+        after = existing[span[1] + len(TIER_END):]
         return before + marked + after.lstrip("\n")
     if existing.strip():
         return existing.rstrip() + "\n\n" + marked
@@ -320,10 +342,11 @@ def _marked_text(existing: str, block: str) -> str:
 
 
 def _strip_marked(existing: str) -> str:
-    if TIER_BEGIN not in existing or TIER_END not in existing:
+    span = _marker_span(existing)
+    if span is None:
         return existing
-    before = existing.split(TIER_BEGIN, 1)[0]
-    after = existing.split(TIER_END, 1)[1].lstrip("\n")
+    before = existing[: span[0]]
+    after = existing[span[1] + len(TIER_END):].lstrip("\n")
     return (before.rstrip() + ("\n" if after else "") + after).rstrip() + "\n"
 
 
@@ -336,16 +359,30 @@ def _generic_instructions() -> str:
     )
 
 
-def _write_instructions(path: str, block: str, dry_run: bool, changes: List[Change]) -> None:
+def _write_instructions(path: str, block: str, dry_run: bool, changes: List[Change],
+                        warnings: List[str] = None) -> None:
     existing = _read_text(path) if os.path.exists(path) else ""
-    _save_text(path, _marked_text(existing, block), dry_run, changes, backup=False)
+    if existing and not markers_balanced(existing):
+        if warnings is not None:
+            warnings.append(
+                f"{path}: unbalanced TIER:BEGIN/TIER:END markers; existing content preserved "
+                "and the TIER block appended after it"
+            )
+    _save_text(path, _marked_text(existing, block), dry_run, changes, backup=True)
 
 
-def _remove_instructions(path: str, dry_run: bool, changes: List[Change]) -> None:
+def _remove_instructions(path: str, dry_run: bool, changes: List[Change],
+                         warnings: List[str] = None) -> None:
     if not os.path.exists(path):
         return
     existing = _read_text(path)
-    _save_text(path, _strip_marked(existing), dry_run, changes, backup=False)
+    if existing and not markers_balanced(existing):
+        if warnings is not None:
+            warnings.append(
+                f"{path}: unbalanced TIER:BEGIN/TIER:END markers; file left untouched"
+            )
+        return
+    _save_text(path, _strip_marked(existing), dry_run, changes, backup=True)
 
 
 def _instruction_paths(specs: Sequence[ClientSpec], selected: Sequence[str], mode: str) -> List[str]:
@@ -472,6 +509,10 @@ def _summary(ui: UI, result: dict) -> None:
             lines.append(f"  {change['path']}{suffix}")
     if result.get("dry_run"):
         lines.append("Dry run: no files were changed.")
+    if result.get("warnings"):
+        lines.append("Warnings:")
+        for warning in result["warnings"]:
+            lines.append(f"  {warning}")
     ui.panel("Installation summary", lines)
     if result.get("dry_run") and result.get("changes"):
         ui.info("Preview of config changes:")
@@ -518,9 +559,11 @@ def install(target: str = ".", clients=None, *, yes: bool = False, dry_run: bool
             selected = ["claude-code"]
 
     changes: List[Change] = []
+    warnings: List[str] = []
     result = {
         "target": root, "clients": selected, "changes": [], "hook": [],
         "instructions": [], "repo": {}, "dry_run": dry_run, "uninstalled": False,
+        "warnings": warnings,
     }
     if repo:
         result["repo"] = _generate_repo(root, dry_run, changes)
@@ -539,7 +582,7 @@ def install(target: str = ".", clients=None, *, yes: bool = False, dry_run: bool
     if instructions and instructions.lower() != "none":
         block = _plugin_instructions(doc) if doc is not None else _generic_instructions()
         for path in _instruction_paths(specs, selected, instructions):
-            _write_instructions(path, block, dry_run, changes)
+            _write_instructions(path, block, dry_run, changes, warnings)
             instr.append(path)
     result["instructions"] = instr
     result["changes"] = [c.__dict__ for c in changes]
@@ -550,6 +593,7 @@ def install(target: str = ".", clients=None, *, yes: bool = False, dry_run: bool
 def _uninstall(root: str, specs: Sequence[ClientSpec], selected: Sequence[str],
                dry_run: bool, ui: UI) -> dict:
     changes: List[Change] = []
+    warnings: List[str] = []
     for spec in specs:
         if spec.id not in selected:
             continue
@@ -564,10 +608,11 @@ def _uninstall(root: str, specs: Sequence[ClientSpec], selected: Sequence[str],
         if spec.hook_path:
             _remove_hook(spec.hook_path, dry_run, changes)
         for path in spec.instruction_paths:
-            _remove_instructions(path, dry_run, changes)
+            _remove_instructions(path, dry_run, changes, warnings)
     result = {
         "target": root, "clients": list(selected), "changes": [c.__dict__ for c in changes],
         "hook": [], "instructions": [], "repo": {}, "dry_run": dry_run, "uninstalled": True,
+        "warnings": warnings,
     }
     ui.header(f"TIER v{VERSION} — Uninstall")
     _summary(ui, result)

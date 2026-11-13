@@ -7,7 +7,7 @@ name = "tier"
 version = "1.0.0"
 description = "TIER: layered context, repository graphs, code slicing, and agent memory"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [{ name = "000jd" }]
 license = { text = "MIT" }
 dependencies = []

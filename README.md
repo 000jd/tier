@@ -4,10 +4,11 @@
 
 **A 4-layer context format, codebase graph indexer, and zero-dependency MCP server that cuts AI agent token usage by 86%–97%.**
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![Zero Dependencies](https://img.shields.io/badge/Zero%20Dependencies-none-brightgreen)](pyproject.toml)
 [![MIT License](https://img.shields.io/badge/MIT-License-blue)](LICENSE)
-[![Tests 88/88](https://img.shields.io/badge/Tests-88%2F88-brightgreen)](tests/)
+[![Tests 103/103](https://img.shields.io/badge/Tests-103%2F103-brightgreen)](tests/)
+[![CI](https://github.com/000jd/tier/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![MCP 2.3 Compatible](https://img.shields.io/badge/MCP-2.3%20Compatible-8A2BE2)](src/tier/mcp/sdk_server.py)
 
 [Quickstart](#30-second-quickstart) · [See it in action](#see-it-in-action) · [Benchmarks](#verified-benchmarks) · [Architecture](ARCHITECTURE.md) · [Format spec](SPEC.md)
@@ -22,12 +23,26 @@ The core is **100% Python standard library** — no runtime dependencies, no API
 
 ## 30-Second Quickstart
 
-From a checkout:
+Requires Python 3.10+ (the official `mcp` SDK also requires 3.10+). Install into an isolated
+tool environment straight from Git — no virtualenv or PEP 668 workaround needed:
 
 ```sh
-python3 -m pip install .          # or: python3 -m pip install -e .
-# isolated CLI: uv tool install .  /  pipx install .
+uv tool install git+https://github.com/000jd/tier      # recommended
+pipx install git+https://github.com/000jd/tier         # equivalent with pipx
 ```
+
+For development inside a virtualenv:
+
+```sh
+python3 -m venv .venv && . .venv/bin/activate
+python3 -m pip install -e .
+```
+
+> **Package name.** The bare name `tier` on PyPI is an unrelated 2022 stub package, and
+> `pip install tier` will install the wrong project. Install from the Git URL above (the
+> distribution is published as `tier-ctx` when installing from an index), or from a local
+> checkout. A bare `pip install .` inside a system interpreter also fails on PEP 668
+> externally-managed Linux distributions — use `uv tool`/`pipx` or a venv.
 
 Then run the two commands that configure and verify everything:
 
@@ -124,19 +139,20 @@ tier install --uninstall --clients all            # remove TIER entries only
 tier install --no-repo --no-hook --instructions none
 ```
 
-Every existing JSON config is backed up to `<file>.bak` before an atomic merge. Existing servers, hooks, and keys are preserved. The installer prefers an absolute `tier-mcp` executable, falling back to the absolute current interpreter with `-m tier.mcp`, so GUI hosts do not depend on shell `PATH`.
+Every existing JSON config and every `CLAUDE.md`/`AGENTS.md` is backed up to `<file>.bak` before an atomic merge. Existing servers, hooks, and keys are preserved. Instruction files whose `TIER:BEGIN`/`TIER:END` markers are unbalanced are never sliced: the installer appends after the user's text and reports a warning instead of destroying content. The installer prefers an absolute `tier-mcp` executable, falling back to the absolute current interpreter with `-m tier.mcp`, so GUI hosts do not depend on shell `PATH`.
 
 </details>
 
 <details>
 <summary><b>Optional Extras (<code>[ui]</code>, <code>[mcp]</code>, <code>[all]</code>)</b></summary>
 
-The default `pip install tier` runtime is **stdlib-only**, with `dependencies = []`.
+The default runtime is **stdlib-only**, with `dependencies = []`. Extras install from the same Git URL:
 
 ```sh
-pip install "tier[ui]"    # rich terminal rendering for installer/doctor
-pip install "tier[mcp]"   # official mcp v2 SDK adapter
-pip install "tier[all]"   # both
+uv tool install "tier[ui] @ git+https://github.com/000jd/tier"    # rich terminal rendering
+uv tool install "tier[mcp] @ git+https://github.com/000jd/tier"   # official mcp v2 SDK adapter
+uv tool install "tier[all] @ git+https://github.com/000jd/tier"   # both
+# inside a venv from a checkout: pip install -e ".[ui]" / ".[mcp]" / ".[all]"
 ```
 
 - `[ui]` adds `rich` styling. Without it, the installer and doctor use ANSI colors and box drawing with a clean non-TTY fallback.
@@ -194,14 +210,14 @@ TIER runs entirely on your machine. There are **no telemetry, analytics, API key
 - Full benchmark output: [benchmarks/BENCH.txt](benchmarks/BENCH.txt)
 
 ```sh
-python3 -m unittest discover -s tests -q     # 88 tests
+python3 -m unittest discover -s tests -q     # 103 tests
 tier doctor .                                # 10 checks: 0 failed, 0 warnings
 python3 benchmarks/bench.py                  # Tracks A-I; writes benchmarks/BENCH.txt
 tier from-repo . -o repo.tier                # refresh the checked-in self-index
 tier lint repo.tier && tier lint SPEC.tier
 ```
 
-**Limits.** Only token counts, retrieval identifiers, and exact-slice coverage are measured — not LLM answer accuracy. Claude's tokenizer is not public; counts use OpenAI `o200k` (or a character estimate when Node is unavailable). JS/TS/Go/Rust symbol extraction is heuristic, not a full parser. A `--max-tokens` budget below the saved artifact-path cost is best-effort.
+**Limits.** Only token counts, retrieval identifiers, and exact-slice coverage are measured — not LLM answer accuracy. Claude's tokenizer is not public; counts use OpenAI `o200k` via a persistent Node worker with an in-memory cache (or a character estimate when Node is unavailable). `tier hook` uses the deterministic estimator so it never pays Node startup. JS/TS/Go/Rust symbol extraction is heuristic, not a full parser. A `--max-tokens` budget below the saved artifact-path cost is best-effort.
 
 ## License
 

@@ -19,7 +19,7 @@ from .converter import (
     _ref_topics, _table_name, from_json, from_md, from_payload, to_md,
 )
 from .retrieval import (
-    SYNONYMS, Session, _find_legacy, _index_tokens, _is_navigation_section,
+    QSTOP, SYNONYMS, Session, _find_legacy, _index_tokens, _is_navigation_section,
     _is_test_module, _norm, _query_terms, _rule_count, _synonym_map, _trigram_sim,
     _trigrams, find, get, index, resolve, split_identifier,
 )

@@ -48,8 +48,17 @@ SYNONYM_GROUPS = [
 ]
 
 
+_SINGULAR_S = {"postgres", "canvas", "atlas", "kubernetes", "chaos", "aws"}
+
+
 def _norm(w: str) -> str:
-    return w[:-1] if len(w) > 3 and w.endswith("s") else w
+    if len(w) <= 3 or not w.endswith("s"):
+        return w
+    if w.endswith(("ss", "us", "is")) or w in _SINGULAR_S:
+        return w
+    if w.endswith("ies") and len(w) > 4:
+        return w[:-3] + "y"
+    return w[:-1]
 
 
 def split_identifier(token: str) -> list:
@@ -338,12 +347,14 @@ def find(doc: Doc, query: str, k: int = 3, legacy: bool = False):
                 best = sim
         return best
 
+    df_cache = {w: sum(1 for x in data if cnt(x["all"], w)) for w in weights}
+    idf_cache = {w: (math.log(1 + N / df) if df else math.log(1 + N)) for w, df in df_cache.items()}
+
     scored = []
     for d in data:
         sc = 0.0
         for w, weight in weights.items():
-            df = sum(1 for x in data if cnt(x["all"], w))
-            idf = math.log(1 + N / df) if df else math.log(1 + N)
+            idf = idf_cache[w]
             tf = (
                 8 * cnt(d["title"], w)
                 + 4 * cnt(d["abstract"], w)

@@ -7,11 +7,6 @@ import os
 import sys
 
 from .converter import from_md, from_payload, to_md
-from .doctor import exit_code as doctor_exit_code
-from .doctor import render as doctor_render
-from .doctor import render_json as doctor_render_json
-from .doctor import run_doctor
-from .installer import install as install_mcp
 from .lint import lint
 from .memory import remember
 from .models import TABLE_MODES, _atomic_write, _read_text
@@ -127,6 +122,8 @@ def main(argv=None):
     p = sub.add_parser("hook", help="Claude Code-style JSON hook filter on stdin")
     p.add_argument("--max-tokens", type=int, default=600)
     p.add_argument("--format", choices=["auto", "json", "md", "log"], default="auto")
+    p.add_argument("--exact", action="store_true",
+                   help="use exact o200k BPE counts instead of the fast estimator")
     p = sub.add_parser("to-md")
     p.add_argument("file")
     p = sub.add_parser("to-json")
@@ -136,6 +133,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     if a.cmd in ("install", "setup"):
+        from .installer import install as install_mcp
+
         ui = default_ui(plain=a.plain, no_color=a.no_color)
         try:
             install_mcp(
@@ -149,6 +148,11 @@ def main(argv=None):
         return 0
 
     if a.cmd == "doctor":
+        from .doctor import exit_code as doctor_exit_code
+        from .doctor import render as doctor_render
+        from .doctor import render_json as doctor_render_json
+        from .doctor import run_doctor
+
         checks = run_doctor(a.root)
         if a.json:
             print(doctor_render_json(checks))
@@ -291,7 +295,7 @@ def main(argv=None):
 
     if a.cmd == "hook":
         try:
-            response = hook_process(_stdin_text(), a.max_tokens, a.format)
+            response = hook_process(_stdin_text(), a.max_tokens, a.format, exact=a.exact)
         except Exception as e:
             response = {"continue": True, "systemMessage": f"tier hook error: {e}"}
         print(json.dumps(response, ensure_ascii=False))

@@ -5,6 +5,11 @@ import os
 from .lint import lint
 from .models import Doc, Section, VERSION, SEC_RE, TABLE_RE, _atomic_write, _table_count
 from .parser import _data_closes, _data_open, _load, dumps, parse
+from .tokens import count_tokens
+
+MAX_RULES = 200
+MAX_SECTIONS = 500
+MAX_SECTION_TOKENS = 4000
 
 
 def _validate_section_body(lines: list):
@@ -37,9 +42,29 @@ def _validate_section_body(lines: list):
         raise ValueError(f"section body has an unterminated {mode} block")
 
 
+def _check_bounds(doc: Doc, max_rules: int, max_sections: int, max_section_tokens: int) -> None:
+    """Reject runaway memory growth so an agent loop cannot append unbounded data."""
+    if len(doc.rules) > max_rules:
+        raise ValueError(
+            f"refusing to write: {len(doc.rules)} global rules exceeds max_rules={max_rules}"
+        )
+    if len(doc.sections) > max_sections:
+        raise ValueError(
+            f"refusing to write: {len(doc.sections)} sections exceeds max_sections={max_sections}"
+        )
+    counts = count_tokens([s.text() for s in doc.sections])[0] if doc.sections else []
+    for sec, n in zip(doc.sections, counts):
+        if n > max_section_tokens:
+            raise ValueError(
+                f"refusing to write: @{sec.id} is ~{n} tokens, "
+                f"exceeds max_section_tokens={max_section_tokens}"
+            )
+
+
 def remember(path: str, action: str, section: str = "", title: str = "", abstract: str = "",
              body=None, text: str = "", key: str = "", value: str = "", target: str = "",
-             note: str = "") -> dict:
+             note: str = "", max_rules: int = MAX_RULES, max_sections: int = MAX_SECTIONS,
+             max_section_tokens: int = MAX_SECTION_TOKENS) -> dict:
     """Atomically add a rule, upsert a section, or append a rule/key/ref."""
     path = os.path.abspath(path)
     action = (action or "").strip().lower().replace("_", "-")
@@ -48,6 +73,9 @@ def remember(path: str, action: str, section: str = "", title: str = "", abstrac
     action = aliases.get(action, action)
     if action not in ("rule", "section", "append-rule", "append-kv", "append-ref"):
         raise ValueError(f"unknown memory action '{action}'")
+    max_rules = int(max_rules)
+    max_sections = int(max_sections)
+    max_section_tokens = int(max_section_tokens)
 
     exists = os.path.exists(path)
     if not exists and action.startswith("append-"):
@@ -135,6 +163,7 @@ def remember(path: str, action: str, section: str = "", title: str = "", abstrac
     checked = parse(out)
     if dumps(checked) != out:
         raise ValueError("refusing to write: document is not round-trip stable")
+    _check_bounds(checked, max_rules, max_sections, max_section_tokens)
     errors = [m for lvl, m in lint(checked) if lvl == "error"]
     if errors:
         raise ValueError("refusing to write: " + "; ".join(errors[:3]))

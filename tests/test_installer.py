@@ -220,6 +220,73 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(root, ".claude/settings.json")))
             self.assertFalse(os.path.exists(os.path.join(root, "CLAUDE.md")))
 
+    def test_unbalanced_markers_backup_and_preserve_user_content(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            _put(root, "demo.py", "def demo():\n    return 1\n")
+            user = (
+                "# Project notes\n\n"
+                "Keep this paragraph intact.\n\n"
+                f"{tier.TIER_BEGIN}\n"
+                "stale TIER block that never closes\n\n"
+                "## Later user notes\n\n"
+                "Do not lose this either.\n"
+            )
+            _put(root, "CLAUDE.md", user)
+            before = _read(os.path.join(root, "CLAUDE.md"))
+            result = installer.install(
+                root, clients=["claude-code"], yes=True, home=home, env={}, platform="linux",
+                ui=_ui(), find_executable=_which,
+            )
+            after = _read(os.path.join(root, "CLAUDE.md"))
+            self.assertIn("Keep this paragraph intact.", after)
+            self.assertIn("## Later user notes", after)
+            self.assertIn("Do not lose this either.", after)
+            self.assertIn("stale TIER block that never closes", after)
+            self.assertEqual(after.count(tier.TIER_BEGIN), 2)
+            self.assertTrue(os.path.exists(os.path.join(root, "CLAUDE.md.bak")))
+            self.assertEqual(_read(os.path.join(root, "CLAUDE.md.bak")), before)
+            self.assertTrue(any("unbalanced" in w for w in result["warnings"]))
+
+            installer.install(root, clients=["claude-code"], uninstall=True, yes=True,
+                              home=home, env={}, platform="linux", ui=_ui())
+            uninstalled = _read(os.path.join(root, "CLAUDE.md"))
+            self.assertEqual(uninstalled, after)
+
+    def test_orphan_end_marker_is_preserved(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            _put(root, "demo.py", "def demo():\n    return 1\n")
+            original = "Intro\n\n" + tier.TIER_END + "\n\nOutro\n"
+            _put(root, "AGENTS.md", original)
+            result = installer.install(
+                root, clients=["claude-code"], yes=True, instructions="agents", repo=False,
+                hook=False, home=home, env={}, platform="linux", ui=_ui(),
+                find_executable=_which,
+            )
+            text = _read(os.path.join(root, "AGENTS.md"))
+            self.assertTrue(text.startswith(original.rstrip("\n")))
+            self.assertIn(tier.TIER_BEGIN, text)
+            self.assertTrue(any("unbalanced" in w for w in result["warnings"]))
+
+    def test_balanced_markers_replace_in_place(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            _put(root, "demo.py", "def demo():\n    return 1\n")
+            existing = (
+                "Header\n\n"
+                f"{tier.TIER_BEGIN}\nold block\n{tier.TIER_END}\n\n"
+                "Footer\n"
+            )
+            _put(root, "CLAUDE.md", existing)
+            result = installer.install(
+                root, clients=["claude-code"], yes=True, home=home, env={}, platform="linux",
+                ui=_ui(), find_executable=_which,
+            )
+            text = _read(os.path.join(root, "CLAUDE.md"))
+            self.assertEqual(text.count(tier.TIER_BEGIN), 1)
+            self.assertEqual(text.count(tier.TIER_END), 1)
+            self.assertNotIn("old block", text)
+            self.assertIn("Footer", text)
+            self.assertFalse(result["warnings"])
+
     def test_setup_alias_cli(self):
         from tier import cli
 

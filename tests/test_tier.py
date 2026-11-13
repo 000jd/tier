@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -1401,7 +1402,25 @@ pub fn buffer() -> [u8; 32] {
             self.assertLess(surgical_t, raw_t * 0.35)
 
     def test_blind_retrieval_track_i(self):
+        corpus_dir = os.path.join(ROOT, "corpus")
+        required = ("claude-code.md", "express-readme.md", "node-building.md",
+                    "pytorch-contributing.md", "redis-readme.md")
+        missing = [name for name in required
+                   if not os.path.isfile(os.path.join(corpus_dir, name))]
+        if missing:
+            self.skipTest(
+                "external corpus not fetched (missing: " + ", ".join(missing)
+                + "); run ./benchmarks/fetch_corpus.sh"
+            )
         doc = bench._blind_corpus()
+        ids = {s.id for s in doc.sections}
+        required_prefixes = ("express_", "pytorch_", "redis_", "node_")
+        absent = [p for p in required_prefixes if not any(i.startswith(p) for i in ids)]
+        if absent:
+            self.skipTest(
+                "external corpus sections missing (" + ", ".join(absent)
+                + "); run ./benchmarks/fetch_corpus.sh"
+            )
         if len(doc.sections) < 50:
             self.skipTest("corpus fixtures unavailable")
         full_t = tier._tokens(tier.dumps(doc))
@@ -1437,6 +1456,325 @@ pub fn buffer() -> [u8; 32] {
         self.assertEqual(tier.find(doc, "", 3), [])
 
 
+class PerfAndSafety(unittest.TestCase):
+    def test_df_cache_matches_uncached_scoring(self):
+        doc = tier.from_md(self_read("examples/payments-runbook.md"))
+        queries = [
+            "how do I roll back a bad deploy", "connection pool size per replica",
+            "duplicate charges refund", "friday deploy freeze", "HighLatencyP99",
+            "mask card digits before logging", "schema migration table lock",
+        ]
+        for query in queries:
+            hits = tier.find(doc, query, 5)
+            terms = tier._query_terms(query)
+            weights = {}
+            for term in terms:
+                weights[term] = max(weights.get(term, 0.0), 1.0)
+                for syn in tier.SYNONYMS.get(term, ()):
+                    if syn in tier.QSTOP or len(syn) < 2:
+                        continue
+                    weights.setdefault(syn, 0.65)
+            reference = PerfAndSafety._reference_find(doc, weights, 5)
+            self.assertEqual([(i, s) for i, s, _a in hits], reference[:len(hits)], query)
+
+    @staticmethod
+    def _reference_find(doc, weights, k):
+        """The pre-fix O(N^2) scoring loop, kept as the differential oracle."""
+        import math
+        data = []
+        for s in doc.sections:
+            title = tier._index_tokens(s.title)
+            abstract = tier._index_tokens(s.abstract)
+            live = tier._live_lines(s.lines)
+            rules = tier._index_tokens(" ".join(x[2:] for x in live if x.startswith("! ")))
+            body = tier._index_tokens(" ".join(x for x in s.lines if not x.startswith("! ")))
+            table_lines, ti = [], 0
+            while ti < len(s.lines):
+                m = tier.TABLE_RE.match(s.lines[ti])
+                if m:
+                    n = tier._table_count(m.group(2))
+                    table_lines.extend(s.lines[ti + 1: ti + 1 + n])
+                    ti += 1 + n
+                    continue
+                ti += 1
+            table = tier._index_tokens(" ".join(table_lines))
+            focus = list(dict.fromkeys(title + abstract + rules))
+            data.append({
+                "s": s, "title": title, "abstract": abstract, "rules": rules, "body": body,
+                "table": table, "all": title + abstract + rules + body + table,
+                "focus_sets": [(t, tier._trigrams(t)) for t in focus if len(t) >= 3],
+                "focus_text": re.sub(r"[^a-z0-9]+", "", " ".join(focus)),
+            })
+        N = max(1, len(data))
+
+        def cnt(tokens, w):
+            return sum(1 for t in tokens if t.startswith(w))
+
+        def fuzzy(d, w):
+            if len(w) < 4:
+                return 0.0
+            tw = tier._trigrams(w)
+            best = 0.0
+            for token, ts in d["focus_sets"]:
+                if abs(len(token) - len(w)) > max(6, len(w)):
+                    continue
+                sim = 2 * len(tw & ts) / max(1, len(tw) + len(ts))
+                best = max(best, sim)
+            return best
+
+        scored = []
+        for d in data:
+            sc = 0.0
+            for w, weight in weights.items():
+                df = sum(1 for x in data if cnt(x["all"], w))
+                idf = math.log(1 + N / df) if df else math.log(1 + N)
+                tf = (8 * cnt(d["title"], w) + 4 * cnt(d["abstract"], w)
+                      + 3 * cnt(d["rules"], w) + min(cnt(d["body"], w), 4)
+                      + 1.2 * min(cnt(d["table"], w), 4))
+                if tf:
+                    sc += weight * idf * tf
+                    continue
+                sim = fuzzy(d, w)
+                if sim >= 0.55:
+                    sc += weight * idf * (0.8 + 2.0 * sim)
+                elif len(w) >= 4 and w in d["focus_text"]:
+                    sc += weight * idf * 0.6
+            if sc > 0:
+                if not any(t in {"test", "tests", "testing", "spec", "specs", "pytest", "unittest"}
+                           for t in weights) and tier._is_test_module(d["s"]):
+                    sc *= 0.35
+                if tier._is_navigation_section(d["s"]):
+                    sc *= 0.5
+                scored.append((d["s"].id, round(sc, 2)))
+        scored.sort(key=lambda x: -x[1])
+        return scored[:k]
+
+    def test_norm_plural_rules(self):
+        cases = {
+            "queries": "query", "policies": "policy", "entries": "entry",
+            "process": "process", "status": "status", "analysis": "analysis",
+            "redis": "redis", "postgres": "postgres", "canvas": "canvas",
+            "connections": "connection", "rules": "rule", "ss": "ss",
+        }
+        for word, expected in cases.items():
+            self.assertEqual(tier._norm(word), expected, word)
+        self.assertEqual(tier._norm("process"), "process")
+        self.assertEqual(tier._norm("processes"), "processe")
+        self.assertEqual(tier._norm("gases"), "gase")
+
+    def test_token_worker_and_cache_exactness(self):
+        from tier import tokens
+
+        tokens.cache_clear()
+        sample = ["hello world", "def parse(text: str) -> Doc:", "", "a" * 4000]
+        counts, backend = tier.count_tokens(sample)
+        one_shot = subprocess.run(
+            ["node", os.path.join(BENCH, "count.mjs")],
+            input=json.dumps(sample), capture_output=True, text=True, timeout=60,
+        )
+        if backend == "o200k":
+            self.assertEqual(counts, json.loads(one_shot.stdout))
+        else:
+            self.assertEqual(backend, "estimate")
+        tokens.cache_clear()
+        cached_hits = []
+        tier.count_tokens(sample)
+        start = time.perf_counter()
+        for _ in range(50):
+            again, _backend = tier.count_tokens(sample)
+            cached_hits.append(again)
+        elapsed = time.perf_counter() - start
+        self.assertTrue(all(x == counts for x in cached_hits))
+        self.assertLess(elapsed / 50, 0.005)
+
+    def test_count_server_worker_roundtrip(self):
+        script = os.path.join(BENCH, "count-server.mjs")
+        if not os.path.isfile(script) or not shutil_which("node"):
+            self.skipTest("node count server unavailable")
+        if not os.path.isdir(os.path.join(BENCH, "node_modules")):
+            self.skipTest("benchmarks/node_modules absent")
+        proc = subprocess.run(
+            ["node", script], input=json.dumps(["alpha", "beta gamma"]) + "\n",
+            capture_output=True, text=True, timeout=60,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(len(json.loads(proc.stdout.splitlines()[0])), 2)
+
+    def test_fit_text_single_pass_budget(self):
+        text = "\n".join(f"line {i} about deployment rollback" for i in range(400))
+        calls = []
+        original = tier.count_tokens
+
+        def counting(strings, fast=None):
+            calls.append(len(strings))
+            return original(strings, fast=fast)
+
+        with __import__("unittest").mock.patch.object(tier.pipe, "count_tokens", counting):
+            out = tier._fit_text(text, 200)
+        self.assertLessEqual(len(out.split("\n")), 400)
+        self.assertLessEqual(len(calls), 2)
+        self.assertLessEqual(tier._tokens(out), 200)
+
+    def test_hook_uses_fast_estimator_by_default(self):
+        big = "\n".join(f"ERROR failed id={i}" for i in range(500))
+        calls = []
+        original = tier.count_tokens
+
+        def spy(strings, fast=None):
+            calls.append(fast)
+            return original(strings, fast=fast)
+
+        with __import__("unittest").mock.patch.object(tier.pipe, "count_tokens", spy):
+            response = tier.hook_process(json.dumps({"tool_response": big}), max_tokens=100)
+        self.assertIn("hookSpecificOutput", response)
+        self.assertTrue(calls)
+        self.assertTrue(all(flag is True for flag in calls))
+
+    def test_malformed_table_row_count_capped_with_warning(self):
+        d = tier.parse("@a A\n|t[999999]{x,y}\n1,2\n3,4\n@b B\nbody\n")
+        self.assertEqual([s.id for s in d.sections], ["a", "b"])
+        self.assertEqual([r[0] for r in tier.nodes(d.sections[0])[0]["rows"]], ["1", "3"])
+        self.assertTrue(any("declares 999999 rows" in w for w in d.warnings))
+        self.assertTrue(any(l == "warn" for l, _m in tier.lint(d)))
+        self.assertIn("body", d.sections[1].lines)
+
+        d = tier.parse("@a A\n|t[-5]{x}\n1\n@b B\nbody\n")
+        self.assertEqual([s.id for s in d.sections], ["a", "b"])
+        self.assertEqual(d.sections[0].lines[1:], ["1"])
+        self.assertTrue(any("malformed table header" in w for w in d.warnings))
+
+        d = tier.parse("@a A\n|t[abc]{x}\n1\n@b B\nbody\n")
+        self.assertEqual([s.id for s in d.sections], ["a", "b"])
+        self.assertTrue(any("malformed table header" in w for w in d.warnings))
+
+    def test_huge_but_wellformed_row_count_still_bounded(self):
+        d = tier.parse("@a A\n|t[" + "9" * 5000 + "]{x}\n1\n2\n")
+        self.assertEqual([r[0] for r in tier.nodes(d.sections[0])[0]["rows"]], ["1", "2"])
+        self.assertTrue(d.warnings)
+
+    def test_remember_bounds(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "memory.tier")
+            tier.remember(path, "section", section="a", title="A", abstract="about a", body=["x"])
+            with self.assertRaises(ValueError) as ctx:
+                tier.remember(path, "rule", text="r1", max_rules=0)
+            self.assertIn("max_rules", str(ctx.exception))
+            with self.assertRaises(ValueError) as ctx:
+                tier.remember(path, "section", section="b", title="B", abstract="b", max_sections=1)
+            self.assertIn("max_sections", str(ctx.exception))
+            with self.assertRaises(ValueError) as ctx:
+                tier.remember(path, "append-rule", section="a", text="x " * 50,
+                              max_section_tokens=5)
+            self.assertIn("max_section_tokens", str(ctx.exception))
+            tier.remember(path, "rule", text="r2")
+            self.assertIn("r2", self_read(path))
+
+    def test_sync_repo_stat_short_circuit(self):
+        with tempfile.TemporaryDirectory() as td:
+            _put(td, "one.py", '"""One."""\n\ndef one():\n    return 1\n')
+            _put(td, "two.py", '"""Two."""\n\ndef two():\n    return 2\n')
+            doc = tier.from_repo(td)
+            path = os.path.join(td, "repo.tier")
+            _put(td, "repo.tier", tier.dumps(doc))
+            reads = []
+            original = tier.repo._read_text
+
+            def spy(p):
+                reads.append(os.path.relpath(p, td))
+                return original(p)
+
+            with __import__("unittest").mock.patch.object(tier.repo, "_read_text", spy):
+                res = tier.sync_repo(path, root=td)
+            self.assertEqual(res["changed"], [])
+            self.assertEqual(reads, [])
+            _put(td, "one.py", '"""One."""\n\ndef one():\n    return 99\n')
+            reads.clear()
+            with __import__("unittest").mock.patch.object(tier.repo, "_read_text", spy):
+                res = tier.sync_repo(path, root=td)
+            self.assertEqual(res["changed"], ["one.py"])
+            self.assertIn("one.py", reads)
+            self.assertNotIn("two.py", reads)
+
+    def test_mcp_auto_sync_signature_cache(self):
+        from tier.mcp import server as tier_mcp
+
+        with tempfile.TemporaryDirectory() as td:
+            _put(td, "demo.py", '"""Demo."""\ndef demo():\n    return 1\n')
+            _put(td, "repo.tier", tier.dumps(tier.from_repo(td)))
+            old_root, old_state = tier_mcp.ROOT, dict(tier_mcp._SYNC_STATE)
+            tier_mcp.ROOT = os.path.realpath(td)
+            tier_mcp._SYNC_STATE.clear()
+            try:
+                first = tier_mcp.call("tier_get", {"path": "repo.tier", "ids": ["demo.py"]})
+                self.assertIn("def demo", first)
+                self.assertIn(os.path.realpath(os.path.join(td, "repo.tier")),
+                              tier_mcp._SYNC_STATE)
+                calls = []
+                original = tier_mcp.sync_repo
+
+                def spy(*args, **kwargs):
+                    calls.append(args[0])
+                    return original(*args, **kwargs)
+
+                tier_mcp.sync_repo = spy
+                try:
+                    tier_mcp.call("tier_get", {"path": "repo.tier", "ids": ["demo.py"]})
+                    self.assertEqual(calls, [])
+                    _put(td, "demo.py",
+                         '"""Demo."""\n\ndef helper():\n    return 0\n\ndef demo():\n    return 2\n')
+                    text = tier_mcp.call("tier_get", {"path": "repo.tier", "ids": ["demo.py"]})
+                    self.assertEqual(len(calls), 1)
+                finally:
+                    tier_mcp.sync_repo = original
+            finally:
+                tier_mcp.ROOT = old_root
+                tier_mcp._SYNC_STATE.clear()
+                tier_mcp._SYNC_STATE.update(old_state)
+
+    def test_mcp_list_batches_token_counting(self):
+        from tier.mcp import server as tier_mcp
+
+        with tempfile.TemporaryDirectory() as td:
+            for i in range(5):
+                _put(td, f"doc{i}.tier", f"%tier 1.0.0\n%title D{i}\n@a A\nbody {i}\n")
+            old_root = tier_mcp.ROOT
+            tier_mcp.ROOT = os.path.realpath(td)
+            calls = []
+            original = tier_mcp.count_tokens
+
+            def spy(strings, fast=None):
+                calls.append(len(strings))
+                return original(strings, fast=fast)
+
+            tier_mcp.count_tokens = spy
+            try:
+                out = tier_mcp.call("tier_list", {})
+            finally:
+                tier_mcp.count_tokens = original
+                tier_mcp.ROOT = old_root
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0], 5)
+            self.assertEqual(len(out.splitlines()), 5)
+
+
+def self_read(path):
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+def shutil_which(name):
+    import shutil
+    return shutil.which(name)
+
+
+def _put(root, name, text):
+    path = os.path.join(root, name)
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return path
 
 
 if __name__ == "__main__":

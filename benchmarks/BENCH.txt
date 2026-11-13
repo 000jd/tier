@@ -85,26 +85,26 @@ ledger write failure stop deploys    deploying            N    alerts           
 F. codebase -> TIER graph index (this TIER project)
 measure                 sections  tokens  vs raw source
 ----------------------  --------  ------  -------------
-raw source files        20        49725   -            
-repo.tier full          20        7200    86% fewer    
-repo.tier L0            20        695     99% fewer    
-L0 + parser.py + 1-hop  1         1460    97% fewer    
-   symbols: 203 expected, 203 in map, missing 0; internal edges: 75; lint errors: 0; round-trip stable: Y
+raw source files        20        53421   -            
+repo.tier full          20        7821    85% fewer    
+repo.tier L0            20        717     99% fewer    
+L0 + parser.py + 1-hop  1         1481    97% fewer    
+   symbols: 230 expected, 230 in map, missing 0; internal edges: 76; lint errors: 0; round-trip stable: Y
    check: L0 + 1-hop >=70% fewer than raw: Y; exported names preserved: Y
    Modules keep exact line ranges and '>' edges, so tier_get --follow returns dependency signatures.
 
 G. end-to-end 4-layer coding workflow (read, locate, signatures, slices, impact/sync)
 step                                tokens
 ----------------------------------  ------
-1. L0 repo index                    695   
+1. L0 repo index                    717   
 2. hybrid find -> module            34    
-3. L2 signatures + 1-hop            765   
-4. L3 slices: parse, from_md, find  2762  
+3. L2 signatures + 1-hop            764   
+4. L3 slices: parse, from_md, find  2984  
 5. impact + incremental sync        185   
-TOTAL workflow                      4441  
-raw source baseline                 49725 
-full repo.tier baseline             7200  
-   savings vs raw source: 91.1%; vs full repo.tier: +38.3%
+TOTAL workflow                      4684  
+raw source baseline                 53421 
+full repo.tier baseline             7821  
+   savings vs raw source: 91.2%; vs full repo.tier: +40.1%
    exact L3 slices: 3/3; impact dependents: 10/10; incremental sync after edit: Y
    check: total workflow >85% under raw source: Y
 
@@ -138,8 +138,8 @@ how do I run the test suite               express_readme-running-tests         Y
 how do I install prerequisites on Window  node_building-windows-prerequisites  Y      70     Y      128  
 max size of ccache cache                  pytorch_contributing-max-size-cache  Y      29     Y      197  
 skip CI while iterating PR title          pytorch_contributing-skip-ci-while   Y      337    Y      469  
-   corpus sections: 197; full corpus 52275 tokens; L0 index 5905 tokens
+   corpus sections: 197; full corpus 52560 tokens; L0 index 5905 tokens
    hit@1 15/15, hit@2 15/15, answer string present in top-1: 15/15
-   mean top-1 fetch 134 tokens; mean L0 + top-1 6039 tokens (88% below full-corpus loading)
+   mean top-1 fetch 134 tokens; mean L0 + top-1 6039 tokens (89% below full-corpus loading)
    check: hit@1 >= 14/15: Y; mean L0+top-1 under 20% of full corpus: Y
 

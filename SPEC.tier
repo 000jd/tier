@@ -1,7 +1,7 @@
 %tier 1.0.0
 %title TIER v1.0.0
 %sum TIER (Tiered Information for Efficient Retrieval) is a line-oriented text format plus a local context, memory, and code-navigation engine for AI agents.
-File extension: `.tier`. Encoding: UTF-8, LF line endings. The reference implementation is a Python 3.9+ package in a `src/` layout and uses the standard library only.
+File extension: `.tier`. Encoding: UTF-8, LF line endings. The reference implementation is a Python 3.10+ package in a `src/` layout and uses the standard library only.
 @package-layout Package layout
 ? The installable package lives under `src/tier/`: `models.py` (dataclasses, constants, path/IO...
 The installable package lives under `src/tier/`: `models.py` (dataclasses, constants, path/IO helpers), `parser.py` (line parser, nodes, serializer, untrusted guards), `converter.py` (Markdown/JSON), `retrieval.py` (index, hybrid search, get, session cache), `repo.py` (polyglot repo maps, sync, L3 slices, impact), `memory.py`, `pipe.py`, `lint.py`, `tokens.py`, `plugin.py`, `installer.py` (interactive setup and safe config merging), `doctor.py` (health checks), `ui.py` (ANSI/rich rendering), `cli.py`, `mcp/server.py`, and the optional `mcp/sdk_server.py`. `tests/` holds the unit and red-team suite; `benchmarks/` holds Tracks A-I and the optional Node token counter; `examples/` holds sample documents.
@@ -52,7 +52,7 @@ Named guards are the safe form. `<<<source #g1` opens a block that closes only a
 @tables Tables
 ? On disk, tables stay compact: one header line plus exactly N CSV rows.
 Values containing a comma or a double quote use CSV quoting. The declared row count `N` lets a parser detect truncation and lets an agent verify it has seen every row.
-A parser must survive malformed tables: a count larger than the remaining file is capped safely and reported by `lint`, NUL bytes become U+FFFD instead of crashing the CSV reader, and unbalanced quotes are lint errors. CRLF is normalized to LF, a leading UTF-8 BOM is ignored, and the phantom field after a trailing newline is not treated as a table row.
+A parser must survive malformed tables: a count larger than the remaining file is capped at the remaining lines and appended to `doc.warnings` as a warning, so later sections are still parsed instead of silently swallowed. A header whose count is negative or non-numeric (`|t[-5]{x}`, `|t[abc]{x}`) is treated as prose with a warning rather than a table. NUL bytes become U+FFFD instead of crashing the CSV reader, and unbalanced quotes are lint errors. CRLF is normalized to LF, a leading UTF-8 BOM is ignored, and the phantom field after a trailing newline is not treated as a table row.
 For retrieval, agents can request a rendered table without changing the stored file. `aligned` emits a spaced Markdown pipe table. `anchored` emits a table header, one row per record with a primary-key anchor and per-cell column labels, and repeats the column list every 20 rows on long tables. The default `raw` mode returns the stored representation.
 A key/value block ends at the first line that is not indented. All scalars are strings; the format does no type coercion.
 @document-shape Document shape
@@ -128,7 +128,7 @@ def parse(text: str) -> Doc:
 - Unchanged modules keep their existing section bodies.
 - Changed and deleted section ids are evicted from the active `Session`, including all `section#symbol` L3 slice entries.
 - `%sum` is refreshed with the current file count, languages, and entrypoints.
-`tier.sync_repo()` returns changed, added, deleted, and unchanged lists. Writing is atomic and skipped when nothing changed. The MCP server auto-syncs a repository map before `tier_index`, `tier_find`, `tier_get`, and `tier_slice`, and exposes `tier_sync` explicitly.
+Before reading or hashing a source file, `sync` compares its current `mtime` and `size` with the recorded fingerprint; when both match, the file is not read at all. `tier.sync_repo()` returns changed, added, deleted, and unchanged lists. Writing is atomic and skipped when nothing changed. The MCP server auto-syncs a repository map before `tier_index`, `tier_find`, `tier_get`, and `tier_slice`, and exposes `tier_sync` explicitly; repeat reads within a short window reuse the last parsed doc when the recorded file and directory stats are unchanged.
 @impact-analysis Impact analysis
 ? `tier impact repo.tier TARGET` inverts the `>` graph:
 - Direct dependents: sections that reference the target.
@@ -145,7 +145,7 @@ section upsert,`--section ID --title T --abstract A --body LINE`,create or repla
 append rule,`--section ID --append-rule TEXT`,append a `!` line
 append key,`--section ID --key KEY VALUE`,upsert a top-level `=` entry
 append reference,`--section ID --ref TARGET --note TEXT`,append a `>` edge
-Writes are validated in memory, dumped, parsed again, round-trip checked, and linted before an atomic replace. A write with a dangling reference, malformed table, or structural injection is rejected and the original file is left untouched. The MCP server invalidates the changed section in its session cache.
+Writes are validated in memory, dumped, parsed again, round-trip checked, bounded, and linted before an atomic replace. A write with a dangling reference, malformed table, or structural injection is rejected and the original file is left untouched. Size limits keep a runaway agent loop from growing memory without bound: `max_rules=200`, `max_sections=500`, and `max_section_tokens=4000` are enforced by default and configurable per call. The MCP server invalidates the changed section in its session cache.
 @stream-log-compression Stream and log compression
 ? `tier pipe` reads stdin and auto-detects JSON, Markdown, or raw log/command output.
 - JSON object arrays become header-once tables and nested objects become key/value trees.
@@ -159,7 +159,7 @@ It finds the largest text field in `tool_response`, `tool_input`, `stdout`, `std
 ```json
 {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "TIER compressed ..."}}
 ```
-Small payloads return `{"continue": true}`. Malformed JSON is treated as a raw tool-response string, so the hook never crashes; a short malformed payload simply continues.
+Small payloads return `{"continue": true}`. Malformed JSON is treated as a raw tool-response string, so the hook never crashes; a short malformed payload simply continues. The hook scores candidates with the deterministic characters/4 estimator by default so every tool call stays fast; pass `exact=True` to `hook_process` when BPE counts are required.
 @agent-plugin-bootstrap Agent plugin bootstrap
 ? `tier init-plugin TARGET` configures a project in one step:
 1. Safely merges a `tier` server entry into `TARGET/.mcp.json` without removing other servers. The entry runs `python -m tier.mcp` with the target directory as its root.
@@ -186,7 +186,7 @@ The adapter wraps all 11 tools with the official SDK's v2 `MCPServer` (falling b
 `tier-mcp`,`tier.mcp.server:main`
 `tier-mcp-sdk`,`tier.mcp.sdk_server:main`
 Optional extras: `ui = ["rich>=13.0"]` for rich terminal rendering, `mcp = ["mcp>=2.0"]` for the official SDK adapter, and `all` for both. The default install remains stdlib-only.
-`pyproject.toml` uses the PEP 621 `src` layout and packages only `src/tier` (plus `src/tier/mcp`); tests, benchmarks, corpus data, and `node_modules` are not bundled. Install locally with `python3 -m pip install .`, `pip install -e . --no-build-isolation`, `pipx install .`, or a `uv` equivalent. `benchmarks/count.mjs` via Node remains optional for exact `o200k_base` counts; without it, including in an installed wheel, TIER uses a character estimate.
+`pyproject.toml` uses the PEP 621 `src` layout and packages only `src/tier` (plus `src/tier/mcp`); tests, benchmarks, corpus data, and `node_modules` are not bundled. Install from Git with `uv tool install git+https://github.com/000jd/tier` or `pipx install git+https://github.com/000jd/tier`, or from a checkout inside a virtualenv with `pip install -e . --no-build-isolation`. The bare PyPI name `tier` belongs to an unrelated stub package; the distribution is published as `tier-ctx` when installing from an index. `benchmarks/count.mjs` and its persistent `benchmarks/count-server.mjs` worker via Node remain optional for exact `o200k_base` counts; repeated strings are served from an in-memory content-hash cache and one Node process serves a whole session. Without Node, including in an installed wheel, TIER uses a character estimate.
 @cli CLI
 ? The `tier` console script and `python -m tier` are equivalent.
 |cli[9]{Command,Purpose}

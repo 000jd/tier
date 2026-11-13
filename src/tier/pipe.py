@@ -14,6 +14,12 @@ from .tokens import count_tokens
 LOG_ERR_RE = re.compile(r"\b(error|err|fail(?:ed|ure|ing)?|fatal|exception|traceback|panic|critical)\b", re.I)
 LOG_WARN_RE = re.compile(r"\b(warn(?:ing)?|deprecated)\b", re.I)
 LOG_CMD_RE = re.compile(r"^\s*(?:\$|>|❯|\+)\s+(.+)$")
+_SHAPE_ISO_RE = re.compile(r"^\[?\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?\]?\s*")
+_SHAPE_TIME_RE = re.compile(r"^\[?\d{2}:\d{2}:\d{2}(?:[.,]\d+)?\]?\s*")
+_SHAPE_HEX_RE = re.compile(r"\b[0-9a-fA-F]{8,}\b")
+_SHAPE_IP_RE = re.compile(r"\b\d+\.\d+\.\d+\.\d+\b")
+_SHAPE_NUM_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
+_SHAPE_WS_RE = re.compile(r"\s+")
 
 
 def detect_stream_format(text: str) -> str:
@@ -31,12 +37,12 @@ def detect_stream_format(text: str) -> str:
 
 def _log_shape(line: str) -> str:
     s = line.strip()
-    s = re.sub(r"^\[?\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?\]?\s*", "", s)
-    s = re.sub(r"^\[?\d{2}:\d{2}:\d{2}(?:[.,]\d+)?\]?\s*", "", s)
-    s = re.sub(r"\b[0-9a-fA-F]{8,}\b", "<hex>", s)
-    s = re.sub(r"\b\d+\.\d+\.\d+\.\d+\b", "<ip>", s)
-    s = re.sub(r"\b\d+(?:\.\d+)?\b", "<n>", s)
-    return re.sub(r"\s+", " ", s)
+    s = _SHAPE_ISO_RE.sub("", s)
+    s = _SHAPE_TIME_RE.sub("", s)
+    s = _SHAPE_HEX_RE.sub("<hex>", s)
+    s = _SHAPE_IP_RE.sub("<ip>", s)
+    s = _SHAPE_NUM_RE.sub("<n>", s)
+    return _SHAPE_WS_RE.sub(" ", s)
 
 
 def log_doc(text: str) -> Doc:
@@ -107,37 +113,50 @@ def from_stream(text: str, fmt: str = "auto") -> Doc:
     raise ValueError(f"unknown stream format '{fmt}'")
 
 
-def _tokens(text: str) -> int:
-    return count_tokens([text])[0][0]
+def _tokens(text: str, fast: bool = None) -> int:
+    return count_tokens([text], fast=fast)[0][0]
 
 
-def _fit_text(text: str, budget: int) -> str:
-    """Keep whole leading lines of text while the exact token count fits."""
+def _fit_text(text: str, budget: int, fast: bool = None) -> str:
+    """Keep whole leading lines of text while the token count fits.
+
+    Keeps the number of token-counter calls at most two regardless of line
+    count: one batched call for every line, then one verification of the
+    joined prefix. A binary search runs only when that join is still over
+    budget, which needs a much larger per-boundary cost than a newline.
+    """
     if budget <= 0 or not text:
         return ""
-    kept = []
-    used = 0
     lines = text.split("\n")
-    counts = count_tokens(lines)[0] if lines else []
-    for line, n in zip(lines, counts):
-        if used + n > budget:
+    counts = count_tokens(lines, fast=fast)[0] if lines else []
+    total = 0
+    keeplen = 0
+    for k, n in enumerate(counts):
+        total += n
+        if total + k > budget:
             break
-        kept.append(line)
-        used += n
-    out = "\n".join(kept)
-    while kept and _tokens(out) > budget:
-        kept.pop()
-        out = "\n".join(kept)
-    return out
+        keeplen = k + 1
+    out = "\n".join(lines[:keeplen])
+    if _tokens(out, fast=fast) <= budget:
+        return out
+    low, high = 0, keeplen
+    while low < high:
+        mid = (low + high + 1) // 2
+        if _tokens("\n".join(lines[:mid]), fast=fast) <= budget:
+            low = mid
+        else:
+            high = mid - 1
+    return "\n".join(lines[:low])
 
 
-def pipe_compress(text: str, fmt: str = "auto", max_tokens: int = None, out_path: str = None) -> str:
+def pipe_compress(text: str, fmt: str = "auto", max_tokens: int = None, out_path: str = None,
+                  fast: bool = None) -> str:
     """Compress a stream; over budget, emit L0 + priority sections and save the full artifact."""
     doc = from_stream(text, fmt)
     full = dumps(doc)
     over = False
     if max_tokens is not None:
-        over = _tokens(full) > max_tokens
+        over = _tokens(full, fast=fast) > max_tokens
     artifact = ""
     if out_path:
         artifact = os.path.abspath(out_path)
@@ -151,14 +170,14 @@ def pipe_compress(text: str, fmt: str = "auto", max_tokens: int = None, out_path
 
     budget = max(0, int(max_tokens))
     artifact_line = f"Full artifact: {artifact}"
-    if budget <= 0 or _tokens(artifact_line) > budget:
+    if budget <= 0 or _tokens(artifact_line, fast=fast) > budget:
         return artifact_line
 
     parts = [artifact_line]
-    idx_text = _fit_text(index(doc), budget - _tokens(artifact_line))
+    idx_text = _fit_text(index(doc), budget - _tokens(artifact_line, fast=fast), fast=fast)
     if idx_text:
         candidate = idx_text + "\n" + artifact_line
-        if _tokens(candidate) <= budget:
+        if _tokens(candidate, fast=fast) <= budget:
             parts = [idx_text, artifact_line]
 
     def priority(sec):
@@ -174,13 +193,13 @@ def pipe_compress(text: str, fmt: str = "auto", max_tokens: int = None, out_path
     for sec in sorted(doc.sections, key=priority):
         body = render_section(sec)
         candidate = "\n".join(parts + [body])
-        if _tokens(candidate) <= budget:
+        if _tokens(candidate, fast=fast) <= budget:
             parts.append(body)
         else:
             omitted.append(sec.id)
     if omitted:
         note = "Omitted sections: " + ", ".join(omitted) + " (fetch from the full artifact)"
-        if _tokens("\n".join(parts + [note])) <= budget:
+        if _tokens("\n".join(parts + [note]), fast=fast) <= budget:
             parts.append(note)
     return "\n".join(parts)
 
@@ -200,9 +219,14 @@ def _text_fields(obj, prefix: str = "", depth: int = 0) -> list:
     return out
 
 
-def hook_process(text: str, max_tokens: int = 600, fmt: str = "auto") -> dict:
-    """Handle a JSON stdin hook payload without blocking or crashing."""
+def hook_process(text: str, max_tokens: int = 600, fmt: str = "auto", exact: bool = False) -> dict:
+    """Handle a JSON stdin hook payload without blocking or crashing.
+
+    Hook mode defaults to the deterministic characters/4 estimator so the first
+    tool call pays no Node startup; pass exact=True to request BPE counts.
+    """
     max_tokens = 600 if max_tokens is None else int(max_tokens)
+    fast = not exact
     malformed = False
     try:
         data = json.loads(text) if text.strip() else {}
@@ -215,12 +239,12 @@ def hook_process(text: str, max_tokens: int = 600, fmt: str = "auto") -> dict:
         fields = _text_fields(data)
     except RecursionError:
         fields = [("payload", text)]
-    for path, value in fields:
-        if len(value) < 200:
-            continue
-        count = count_tokens([value])[0][0]
-        if count > best_tokens:
-            best_path, best_text, best_tokens = path or "payload", value, count
+    long_fields = [(path, value) for path, value in fields if len(value) >= 200]
+    if long_fields:
+        counts = count_tokens([value for _path, value in long_fields], fast=fast)[0]
+        for (path, value), count in zip(long_fields, counts):
+            if count > best_tokens:
+                best_path, best_text, best_tokens = path or "payload", value, count
     if best_tokens <= max_tokens:
         response = {"continue": True}
         if malformed:
@@ -228,7 +252,9 @@ def hook_process(text: str, max_tokens: int = 600, fmt: str = "auto") -> dict:
         return response
     prefix = f"TIER compressed {best_path} ({best_tokens} tokens):\n"
     try:
-        compressed = pipe_compress(best_text, fmt, max(1, max_tokens - _tokens(prefix)))
+        compressed = pipe_compress(
+            best_text, fmt, max(1, max_tokens - _tokens(prefix, fast=fast)), fast=fast
+        )
     except Exception as e:
         return {"continue": True, "systemMessage": f"tier hook error: {e}"}
     event = data.get("hook_event_name") or data.get("hookEventName") or "PostToolUse"

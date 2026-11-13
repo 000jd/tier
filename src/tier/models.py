@@ -4,7 +4,6 @@ from __future__ import annotations
 import csv
 import os
 import re
-import tempfile
 from dataclasses import dataclass, field
 
 VERSION = "1.0.0"
@@ -12,6 +11,7 @@ SIGIL_CHARS = "%@?!=|>$;\\"
 SEC_RE = re.compile(r"^@([a-z0-9][a-z0-9_.-]*)(?:[ \t]+(.*))?$")
 HDR_RE = re.compile(r"^%([a-z][a-z0-9_-]*)(?:[ \t]+(.*))?$")
 TABLE_RE = re.compile(r"^\|([A-Za-z_][\w.-]*)\[(\d+)\]\{([^}]*)\}\s*$")
+TABLE_HEAD_RE = re.compile(r"^\|([A-Za-z_][\w.-]*)\[[^\]]*\]\{[^}]*\}\s*$")
 DATA_OPEN_RE = re.compile(r"^<<<(.*?)(?:[ \t]+#([A-Za-z0-9_.-]+))?[ \t]*$")
 RULE_START = re.compile(r"^(never|always|do not|don't|must not|must|only)\b", re.I)
 STOP = {"and", "the", "a", "an", "of", "to", "for", "in", "with", "is", "are"}
@@ -96,6 +96,8 @@ def _read_text(path: str) -> str:
 
 
 def _atomic_write(path: str, text: str) -> None:
+    import tempfile
+
     path = os.path.abspath(path)
     directory = os.path.dirname(path) or "."
     os.makedirs(directory, exist_ok=True)
