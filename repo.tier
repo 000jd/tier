@@ -1403,12 +1403,12 @@ SDKAdapterTests.test_all_twelve_tools_register_and_call,_put,.
 = file
   path tests/test_tier.py
   language python
-  lines 1943
-  sha256 97197797d319acee
-  mtime 1794570234882335856
-  size 95016
+  lines 1946
+  sha256 4a1dfdb8f0d17511
+  mtime 1794570365044129916
+  size 95195
 |symbols[115]{kind,name,signature,lines}
-class,T,class T(unittest.TestCase),22-816
+class,T,class T(unittest.TestCase),22-818
 method,T.rt,"def rt(self, text)",23-25
 method,T.read,"def read(self, name)",27-29
 method,T.put,"def put(self, root, name, text)",31-38
@@ -1466,63 +1466,63 @@ method,T.test_mcp_tool_surface_and_repo,def test_mcp_tool_surface_and_repo(self)
 method,T.test_slice_exact_lines_and_context,def test_slice_exact_lines_and_context(self),571-591
 method,T.test_slice_session_dedup_and_force,def test_slice_session_dedup_and_force(self),593-603
 method,T.test_slice_rejects_path_traversal,def test_slice_rejects_path_traversal(self),605-612
-method,T.test_sync_modified_updates_ranges_and_invalidates,def test_sync_modified_updates_ranges_and_invalidates(self),614-636
-method,T.test_sync_added_deleted_and_cleans_refs,def test_sync_added_deleted_and_cleans_refs(self),638-655
-method,T.test_sync_upgrades_old_repo_without_fingerprints,def test_sync_upgrades_old_repo_without_fingerprints(self),657-670
-method,T.test_impact_forward_reverse_and_symbol,def test_impact_forward_reverse_and_symbol(self),672-687
-method,T.test_impact_git_fallback_changed_symbols,def test_impact_git_fallback_changed_symbols(self),689-700
-method,T.test_hook_process_and_malformed,def test_hook_process_and_malformed(self),702-712
-method,T.test_hook_cli,def test_hook_cli(self),714-725
-method,T.test_init_plugin_hook_settings,def test_init_plugin_hook_settings(self),727-744
-method,T.test_pyproject_and_version_metadata,def test_pyproject_and_version_metadata(self),746-765
-method,T.test_mcp_slice_and_impact,def test_mcp_slice_and_impact(self),767-790
-method,T.test_mcp_auto_sync_on_get_and_slice,def test_mcp_auto_sync_on_get_and_slice(self),792-816
-function,_put,"def _put(root, name, text)",818-825
-function,_read,def _read(path),828-830
-function,_rows,"def _rows(doc, sid)",833-839
-class,_MCPClient,class _MCPClient,842-882
-method,_MCPClient.__init__,"def __init__(self, root)",843-849
-method,_MCPClient.request,"def request(self, method, params=None)",851-861
-method,_MCPClient.call,"def call(self, name, arguments)",863-866
-method,_MCPClient.close,def close(self),868-882
-class,Audit,class Audit(unittest.TestCase),885-1484
-method,Audit.test_guard_collision_fuzz,def test_guard_collision_fuzz(self),886-922
-method,Audit.test_path_traversal_and_symlinks,def test_path_traversal_and_symlinks(self),924-984
-method,Audit.test_parser_state_machine_robustness,def test_parser_state_machine_robustness(self),986-1037
-method,Audit.test_slice_boundaries_multilang,def test_slice_boundaries_multilang(self),1039-1166
-method,Audit.test_python_fallback_js_arrow_and_unreadable,def test_python_fallback_js_arrow_and_unreadable(self),1168-1200
-method,Audit.test_mcp_live_edit_and_session_eviction,def test_mcp_live_edit_and_session_eviction(self),1202-1286
-method,Audit.test_pipe_hook_stress_and_budget,def test_pipe_hook_stress_and_budget(self),1288-1341
-method,Audit.test_impact_git_subdir_and_sync_edges,def test_impact_git_subdir_and_sync_edges(self),1343-1392
-method,Audit.test_polyglot_track_h,def test_polyglot_track_h(self),1394-1430
-method,Audit.test_blind_retrieval_track_i,def test_blind_retrieval_track_i(self),1432-1468
-method,Audit.test_ranking_priors,def test_ranking_priors(self),1470-1484
-class,PerfAndSafety,class PerfAndSafety(unittest.TestCase),1487-1919
-method,PerfAndSafety.test_df_cache_matches_uncached_scoring,def test_df_cache_matches_uncached_scoring(self),1488-1506
-method,PerfAndSafety._reference_find,"def _reference_find(doc, weights, k)",1508-1578
-method,PerfAndSafety.test_norm_plural_rules,def test_norm_plural_rules(self),1580-1591
-method,PerfAndSafety.test_token_worker_and_cache_exactness,def test_token_worker_and_cache_exactness(self),1593-1619
-method,PerfAndSafety.test_count_server_worker_roundtrip,def test_count_server_worker_roundtrip(self),1621-1632
-method,PerfAndSafety.test_fit_text_single_pass_budget,def test_fit_text_single_pass_budget(self),1634-1647
-method,PerfAndSafety.test_hook_without_exact_backend_stays_within_budget,def test_hook_without_exact_backend_stays_within_budget(self),1649-1662
-method,PerfAndSafety.test_hook_budget_is_exact_not_estimated,def test_hook_budget_is_exact_not_estimated(self),1664-1686
-method,PerfAndSafety.test_hook_passes_through_only_when_provably_small,def test_hook_passes_through_only_when_provably_small(self),1688-1692
-method,PerfAndSafety.test_hook_reports_counting_mode,def test_hook_reports_counting_mode(self),1694-1699
-method,PerfAndSafety.test_hook_fast_mode_is_biased_safe,def test_hook_fast_mode_is_biased_safe(self),1701-1707
-method,PerfAndSafety.test_malformed_table_row_count_capped_with_warning,def test_malformed_table_row_count_capped_with_warning(self),1709-1724
-method,PerfAndSafety.test_huge_but_wellformed_row_count_still_bounded,def test_huge_but_wellformed_row_count_still_bounded(self),1726-1729
-method,PerfAndSafety.test_sync_detects_same_size_edit_with_restored_mtime,def test_sync_detects_same_size_edit_with_restored_mtime(self),1731-1749
-method,PerfAndSafety.test_sync_rehash_flag_catches_what_stat_cache_misses,def test_sync_rehash_flag_catches_what_stat_cache_misses(self),1751-1761
-method,PerfAndSafety.test_sync_mtime_cache_heals_when_recorded_mtime_predates_map,def test_sync_mtime_cache_heals_when_recorded_mtime_predates_map(self),1763-1780
-method,PerfAndSafety.test_sync_rehash_keeps_clean_tree_clean,def test_sync_rehash_keeps_clean_tree_clean(self),1782-1789
-method,PerfAndSafety.test_remember_bounds,def test_remember_bounds(self),1791-1806
-method,PerfAndSafety.test_sync_fingerprint_matches_crlf_checkout,def test_sync_fingerprint_matches_crlf_checkout(self),1808-1832
-method,PerfAndSafety.test_sync_repo_stat_short_circuit,def test_sync_repo_stat_short_circuit(self),1834-1858
-method,PerfAndSafety.test_mcp_auto_sync_signature_cache,def test_mcp_auto_sync_signature_cache(self),1860-1894
-method,PerfAndSafety.test_mcp_list_batches_token_counting,def test_mcp_list_batches_token_counting(self),1896-1919
-function,self_read,def self_read(path),1922-1924
-function,shutil_which,def shutil_which(name),1927-1929
-function,_put,"def _put(root, name, text)",1932-1939
+method,T.test_sync_modified_updates_ranges_and_invalidates,def test_sync_modified_updates_ranges_and_invalidates(self),614-638
+method,T.test_sync_added_deleted_and_cleans_refs,def test_sync_added_deleted_and_cleans_refs(self),640-657
+method,T.test_sync_upgrades_old_repo_without_fingerprints,def test_sync_upgrades_old_repo_without_fingerprints(self),659-672
+method,T.test_impact_forward_reverse_and_symbol,def test_impact_forward_reverse_and_symbol(self),674-689
+method,T.test_impact_git_fallback_changed_symbols,def test_impact_git_fallback_changed_symbols(self),691-702
+method,T.test_hook_process_and_malformed,def test_hook_process_and_malformed(self),704-714
+method,T.test_hook_cli,def test_hook_cli(self),716-727
+method,T.test_init_plugin_hook_settings,def test_init_plugin_hook_settings(self),729-746
+method,T.test_pyproject_and_version_metadata,def test_pyproject_and_version_metadata(self),748-767
+method,T.test_mcp_slice_and_impact,def test_mcp_slice_and_impact(self),769-792
+method,T.test_mcp_auto_sync_on_get_and_slice,def test_mcp_auto_sync_on_get_and_slice(self),794-818
+function,_put,"def _put(root, name, text)",820-827
+function,_read,def _read(path),830-832
+function,_rows,"def _rows(doc, sid)",835-841
+class,_MCPClient,class _MCPClient,844-884
+method,_MCPClient.__init__,"def __init__(self, root)",845-851
+method,_MCPClient.request,"def request(self, method, params=None)",853-863
+method,_MCPClient.call,"def call(self, name, arguments)",865-868
+method,_MCPClient.close,def close(self),870-884
+class,Audit,class Audit(unittest.TestCase),887-1486
+method,Audit.test_guard_collision_fuzz,def test_guard_collision_fuzz(self),888-924
+method,Audit.test_path_traversal_and_symlinks,def test_path_traversal_and_symlinks(self),926-986
+method,Audit.test_parser_state_machine_robustness,def test_parser_state_machine_robustness(self),988-1039
+method,Audit.test_slice_boundaries_multilang,def test_slice_boundaries_multilang(self),1041-1168
+method,Audit.test_python_fallback_js_arrow_and_unreadable,def test_python_fallback_js_arrow_and_unreadable(self),1170-1202
+method,Audit.test_mcp_live_edit_and_session_eviction,def test_mcp_live_edit_and_session_eviction(self),1204-1288
+method,Audit.test_pipe_hook_stress_and_budget,def test_pipe_hook_stress_and_budget(self),1290-1343
+method,Audit.test_impact_git_subdir_and_sync_edges,def test_impact_git_subdir_and_sync_edges(self),1345-1394
+method,Audit.test_polyglot_track_h,def test_polyglot_track_h(self),1396-1432
+method,Audit.test_blind_retrieval_track_i,def test_blind_retrieval_track_i(self),1434-1470
+method,Audit.test_ranking_priors,def test_ranking_priors(self),1472-1486
+class,PerfAndSafety,class PerfAndSafety(unittest.TestCase),1489-1922
+method,PerfAndSafety.test_df_cache_matches_uncached_scoring,def test_df_cache_matches_uncached_scoring(self),1490-1508
+method,PerfAndSafety._reference_find,"def _reference_find(doc, weights, k)",1510-1580
+method,PerfAndSafety.test_norm_plural_rules,def test_norm_plural_rules(self),1582-1593
+method,PerfAndSafety.test_token_worker_and_cache_exactness,def test_token_worker_and_cache_exactness(self),1595-1621
+method,PerfAndSafety.test_count_server_worker_roundtrip,def test_count_server_worker_roundtrip(self),1623-1634
+method,PerfAndSafety.test_fit_text_single_pass_budget,def test_fit_text_single_pass_budget(self),1636-1649
+method,PerfAndSafety.test_hook_without_exact_backend_stays_within_budget,def test_hook_without_exact_backend_stays_within_budget(self),1651-1664
+method,PerfAndSafety.test_hook_budget_is_exact_not_estimated,def test_hook_budget_is_exact_not_estimated(self),1666-1688
+method,PerfAndSafety.test_hook_passes_through_only_when_provably_small,def test_hook_passes_through_only_when_provably_small(self),1690-1694
+method,PerfAndSafety.test_hook_reports_counting_mode,def test_hook_reports_counting_mode(self),1696-1701
+method,PerfAndSafety.test_hook_fast_mode_is_biased_safe,def test_hook_fast_mode_is_biased_safe(self),1703-1709
+method,PerfAndSafety.test_malformed_table_row_count_capped_with_warning,def test_malformed_table_row_count_capped_with_warning(self),1711-1726
+method,PerfAndSafety.test_huge_but_wellformed_row_count_still_bounded,def test_huge_but_wellformed_row_count_still_bounded(self),1728-1731
+method,PerfAndSafety.test_sync_detects_same_size_edit_with_restored_mtime,def test_sync_detects_same_size_edit_with_restored_mtime(self),1733-1752
+method,PerfAndSafety.test_sync_rehash_flag_catches_what_stat_cache_misses,def test_sync_rehash_flag_catches_what_stat_cache_misses(self),1754-1764
+method,PerfAndSafety.test_sync_mtime_cache_heals_when_recorded_mtime_predates_map,def test_sync_mtime_cache_heals_when_recorded_mtime_predates_map(self),1766-1783
+method,PerfAndSafety.test_sync_rehash_keeps_clean_tree_clean,def test_sync_rehash_keeps_clean_tree_clean(self),1785-1792
+method,PerfAndSafety.test_remember_bounds,def test_remember_bounds(self),1794-1809
+method,PerfAndSafety.test_sync_fingerprint_matches_crlf_checkout,def test_sync_fingerprint_matches_crlf_checkout(self),1811-1835
+method,PerfAndSafety.test_sync_repo_stat_short_circuit,def test_sync_repo_stat_short_circuit(self),1837-1861
+method,PerfAndSafety.test_mcp_auto_sync_signature_cache,def test_mcp_auto_sync_signature_cache(self),1863-1897
+method,PerfAndSafety.test_mcp_list_batches_token_counting,def test_mcp_list_batches_token_counting(self),1899-1922
+function,self_read,def self_read(path),1925-1927
+function,shutil_which,def shutil_which(name),1930-1932
+function,_put,"def _put(root, name, text)",1935-1942
 |calls[75]{caller,callee,module}
 T,put,.
 T,read,.
