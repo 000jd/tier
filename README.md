@@ -26,10 +26,12 @@ official MCP SDK adapter, and Tree-sitter grammars.
 
 ## Installation
 
+Zero-clone installs, in order of least commitment:
+
 ```sh
-uv tool install tier-ctx
-pipx install tier-ctx
-uvx --from tier-ctx tier install
+uvx --from tier-ctx tier install     # run the installer once, leave nothing installed
+uv tool install tier-ctx             # put `tier`, `tier-mcp`, and `tier-mcp-sdk` on PATH
+pipx install tier-ctx                # the same, where pipx is preferred
 ```
 
 Until the PyPI release is live, install from Git:
@@ -50,6 +52,61 @@ pip install -e ".[all]"
 > The distribution is named `tier-ctx`; the import package and console scripts are `tier`,
 > `tier-mcp`, and `tier-mcp-sdk`. The bare PyPI name `tier` belongs to an unrelated package.
 
+## Example
+
+An end-to-end session on a small project — install once, then one call per question:
+
+````console
+$ tier install --clients claude-code --yes
+Target: /home/me/myproject
+Clients: claude-code
+cache (.git/info/tier): /home/me/myproject/.git/info/tier/repo.tier (created)
+Tokens: raw source 197 -> L0 130 (34.0% saved)
+Instructions: /home/me/myproject/CLAUDE.md, /home/me/myproject/AGENTS.md
+
+$ tier context . "how does the retry backoff work" --budget-tokens 800
+## Context: how does the retry backoff work
+
+@src-http-client.py src/http/client.py
+? HTTP client with retry and backoff.; symbols: backoff_delay, request
+|symbols[3]{kind,name,signature,lines}
+function,backoff_delay,def backoff_delay(attempt: int) -> float,7-9
+function,request,"def request(url: str, retries: int=DEFAULT_RETRIES)",12-19
+function,_send,def _send(url: str),22-23
+|calls[1]{caller,callee,module}
+request,backoff_delay,.
+
+@src-http-client.py#backoff_delay [L7-L9]
+```python
+def backoff_delay(attempt: int) -> float:
+    """Exponential backoff, capped at 30 seconds."""
+    return min(2 ** attempt, 30.0)
+```
+
+## Impact: @src-http-client.py#backoff_delay
+Direct dependents: @src-api-client.py
+Transitive dependents: @src-api-client.py
+Symbol callers: src/http/client.py#request [12-19]
+
+$ tier impact src/http/client.py#backoff_delay
+Impact target: @src-http-client.py
+Direct dependents: @src-api-client.py
+Transitive dependents: @src-api-client.py
+Dependencies: none
+Transitive dependencies: none
+Symbol: src/http/client.py#backoff_delay
+Symbol callers: src/http/client.py#request [12-19]
+Symbol calls: none
+
+$ tier slice src/http/client.py backoff_delay
+@src-http-client.py#backoff_delay [L7-L9]
+```python
+def backoff_delay(attempt: int) -> float:
+    """Exponential backoff, capped at 30 seconds."""
+    return min(2 ** attempt, 30.0)
+```
+````
+
 ## How it works
 
 TIER splits every document into four layers, and an agent reads only the ones it needs.
@@ -66,40 +123,6 @@ TIER splits every document into four layers, and an agent reads only the ones it
 route the query with the hybrid retriever, match symbol names, then pack L2 bodies, L3 slices,
 and a dependency summary until the token budget is spent. The granular commands remain available
 when you need a specific section id or symbol.
-
-## Example
-
-```console
-$ cd myproject && tier install --clients claude-code --yes
-configured /home/me/myproject/.mcp.json
-cache (.git/info/tier): /home/me/myproject/.git/info/tier/repo.tier (created)
-Instructions: /home/me/myproject/CLAUDE.md, /home/me/myproject/AGENTS.md
-
-$ tier context . "how does the retry backoff work" --budget-tokens 800
-## Context: how does the retry backoff work
-
-@src-http-client.py src/http/client.py
-? HTTP client with retry and backoff; read when debugging request failures
-|symbols[3]{kind,name,signature,lines}
-function,request,def request(url: str, retries: int = 3),18-41
-function,backoff_delay,def backoff_delay(attempt: int) -> float,44-49
-|calls[1]{caller,callee,module}
-request,backoff_delay,.
-
-## Impact: @src-http-client.py
-
-Direct dependents: @src-api-client.py
-Dependencies: @src-config.py
-
-$ tier impact src/http/client.py#backoff_delay
-Impact target: @src-http-client.py
-Direct dependents: @src-api-client.py
-Symbol: src/http/client.py#backoff_delay
-Symbol callers: src/http/client.py#request [18-41]
-
-$ tier slice src/http/client.py backoff_delay
-@src-http-client.py#backoff_delay [L44-L49]
-```
 
 ## Architecture highlights
 
@@ -121,12 +144,14 @@ changed, and their slices.
 
 **Symbol-level blast radius.** Repository maps record `>` edges between modules and a `|calls`
 table of caller/callee pairs. `tier impact` reports file-level importers and, given
-`module#symbol`, the exact functions that call it.
+`module#symbol`, the exact functions that call it. `tier_context` filters `|calls` tables to the
+1-hop neighbourhood of the sections it returns; pass `include_calls="all"` to see every edge.
 
 **Invisible repository cache.** The map is a derived artifact, so it lives in
 `.git/info/tier/repo.tier` inside a worktree (which Git ignores) or in a user cache directory
-outside it. A tracked `repo.tier` is still honoured when one exists. Nothing is written into your
-working tree, so `git status` stays clean.
+outside it. `.git` is followed when it is a pointer file rather than a directory, so linked
+worktrees and submodules resolve to their own git directory. A tracked `repo.tier` is still
+honoured when one exists. Nothing is written into your working tree, so `git status` stays clean.
 
 **Hybrid search with precomputed IDF.** BM25-style term scoring over split identifiers, a compact
 synonym map, character 3-gram fallback for typos, and navigation priors. Document frequencies are
@@ -135,19 +160,19 @@ computed once per query, which keeps a search over 800 sections near 200 ms with
 ## Performance
 
 Measured with the `o200k_base` tokenizer. These are token counts and retrieval hit rates, not LLM
-answer accuracy. Full methodology and reproduction steps are in
-[`benchmarks/README.md`](benchmarks/README.md); raw output is in
-[`benchmarks/BENCH.txt`](benchmarks/BENCH.txt).
+answer accuracy. Methodology and reproduction steps are in
+[`benchmarks/README.md`](benchmarks/README.md).
 
 | Workload | Measure | Result |
 |---|---|---|
-| 60 records × 6 fields | TIER table vs pretty JSON | 1,331 vs 3,393 tokens (−61%) |
-| Nested config, 4 levels | TIER key/value vs pretty JSON / YAML | 143 vs 234 / 165 tokens |
-| `src/tier` self-index | raw source → full map → L0 → L0 + one module | 72,859 → 14,375 → 828 → 1,784 tokens (−98%) |
-| Bug-localization workflow | five steps: index, find, L2, L3 slices, impact + sync | 5,003 tokens (−93.1%), 3/3 exact slices |
-| 36-file polyglot repo | surgical L0 + target L2 + 7 slices | 3,008 vs 8,249 tokens (−64%), 116/116 symbols |
-| Payments runbook | L0 index vs whole Markdown | 352 vs 1,463 tokens |
-| 197-section corpus | blind retrieval, 15 queries | 15/15 hit@1, mean top-1 fetch 134 tokens |
+| Repository overview | raw source → full map → L0 → L0 + one module | 72,859 → 14,375 → 828 → 1,784 tokens (−98%) |
+| End-to-end 4-layer workflow | index, find, L2, L3 slices, impact + sync | 5,003 tokens (−93.1%), 3/3 exact slices |
+| 36-file polyglot repository | surgical L0 + target L2 + 7 slices | 3,008 vs 8,249 tokens (−64%), 116/116 symbols |
+| 197-section blind retrieval | 15 queries | 15/15 hit@1, mean top-1 fetch 134 tokens |
+
+[`benchmarks/BENCH.txt`](benchmarks/BENCH.txt) carries the full Track A–I breakdown, including the
+record-encoding and nested-config tracks, the per-query retrieval logs, and the raw output behind
+every row above.
 
 ## Supported clients
 
@@ -203,8 +228,9 @@ uv tool install "tier-ctx[all] @ git+https://github.com/000jd/tier"
 
 ## Documentation
 
-- [`SPEC.md`](SPEC.md) — the format, parser rules, and retrieval protocol
+- [`docs/spec.md`](docs/spec.md) — the format, parser rules, and retrieval protocol
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — module boundaries, layer flow, and invariants
+- [`SKILL.md`](SKILL.md) — the canonical Agent Skill: entry point, CLI and MCP tables, working rules
 - [`docs/cli.md`](docs/cli.md) — every command and flag
 - [`docs/mcp.md`](docs/mcp.md) — the 12 MCP tools, one-turn workflow, and cache behaviour
 - [`benchmarks/README.md`](benchmarks/README.md) — workload definitions and methodology

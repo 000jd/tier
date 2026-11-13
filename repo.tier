@@ -1,18 +1,55 @@
-%tier 1.1.0
+%tier 1.2.0
 %title tier repository map
-%sum 28 source files; languages: javascript 2, python 26; entrypoints: src/tier/__main__.py, src/tier/cli.py, src/tier/mcp/__main__.py, src/tier/mcp/server.py
+%sum 29 source files; languages: javascript 2, python 27; entrypoints: src/tier/__main__.py, src/tier/cli.py, src/tier/mcp/__main__.py, src/tier/mcp/server.py
 %rule Read the repo.tier module map before opening source files; fetch only the listed line ranges.
 %rule Use tier_get with follow=true to pull a module and its direct local dependencies.
 %rule Use tier_slice for exact L3 source slices instead of reading whole files.
+@benchmarks-agent_ab.py benchmarks/agent_ab.py
+? Track J: agent A/B on this repository - how much does an agent read, and in how few turns. Three realistic localization tasks are run...; symbols: say, toks, table, read, terms, recall, symbol_home, arm_baseline
+= file
+  path benchmarks/agent_ab.py
+  language python
+  lines 287
+  sha256 40b44882351a7347
+  mtime 1794573860545872246
+  size 11671
+|symbols[11]{kind,name,signature,lines}
+function,say,def say(s=''),83-84
+function,toks,def toks(strings),87-89
+function,table,"def table(headers, rows)",92-98
+function,read,def read(path),101-103
+function,terms,def terms(query),106-109
+function,recall,"def recall(text, expected)",112-122
+function,symbol_home,def symbol_home(doc),125-131
+function,arm_baseline,def arm_baseline(query),135-150
+function,arm_four_turn,"def arm_four_turn(doc, query, expected)",153-195
+function,arm_one_turn,def arm_one_turn(query),198-208
+function,main,def main(),212-279
+|calls[13]{caller,callee,module}
+table,say,.
+arm_baseline,terms,.
+arm_baseline,read,.
+arm_baseline,toks,.
+arm_four_turn,symbol_home,.
+arm_four_turn,toks,.
+arm_one_turn,build_context,src/tier/context.py
+main,say,.
+main,table,.
+main,arm_baseline,.
+main,arm_four_turn,.
+main,arm_one_turn,.
+main,recall,.
+> src-tier-__init__.py
+> src-tier-context.py
 @benchmarks-bench.py benchmarks/bench.py
 ? Token benchmarks for TIER vs Markdown / JSON / YAML / CSV / TOON-style. Tokenizer: o200k_base BPE (OpenAI) via node `gpt-tokenizer` when...; symbols: say, toks, table, bench_records, bench_nested, bench_runbook, words, bench_corpus
 = file
   path benchmarks/bench.py
   language python
-  lines 1426
-  sha256 22f8754e7644cd93
-  mtime 1794568411586378920
-  size 51043
+  lines 1445
+  sha256 46ecf6b7807457e9
+  mtime 1794574039129537736
+  size 52347
 |symbols[21]{kind,name,signature,lines}
 function,_yaml_scalar,def _yaml_scalar(value) -> str,43-56
 function,_yaml_lines,"def _yaml_lines(value, indent: int=0) -> list",59-97
@@ -31,10 +68,10 @@ function,bench_workflow,def bench_workflow(),407-507
 function,write_polyglot,def write_polyglot(root),1164-1170
 function,_poly_rows,"def _poly_rows(doc, rel)",1173-1183
 function,_poly_range_check,"def _poly_range_check(root, doc)",1186-1222
-function,bench_polyglot,def bench_polyglot(),1225-1296
-function,_merge_docs,def _merge_docs(docs),1320-1346
-function,_blind_corpus,def _blind_corpus(),1349-1364
-function,bench_blind_retrieval,def bench_blind_retrieval(),1367-1401
+function,bench_polyglot,def bench_polyglot(),1225-1315
+function,_merge_docs,def _merge_docs(docs),1339-1365
+function,_blind_corpus,def _blind_corpus(),1368-1383
+function,bench_blind_retrieval,def bench_blind_retrieval(),1386-1420
 |calls[37]{caller,callee,module}
 _yaml_lines,_yaml_scalar,.
 _yaml_dump,_yaml_lines,.
@@ -74,6 +111,7 @@ bench_blind_retrieval,toks,.
 bench_blind_retrieval,say,.
 bench_blind_retrieval,table,.
 > src-tier-__init__.py
+> src-tier-context.py
 @benchmarks-count-server.mjs benchmarks/count-server.mjs
 ? Long-lived stdio token counter: reads one JSON array of strings per line, writes one JSON array of o200k_base token counts per line...; symbols: none
 = file
@@ -126,22 +164,26 @@ bench_blind_retrieval,table,.
 = file
   path src/tier/cache.py
   language python
-  lines 195
-  sha256 bec1dbf40e71b34d
-  mtime 1794568261416274723
-  size 7186
-|symbols[10]{kind,name,signature,lines}
+  lines 260
+  sha256 c35331eda4a6e3b3
+  mtime 1794572762675260281
+  size 9729
+|symbols[12]{kind,name,signature,lines}
 function,cache_root,def cache_root() -> str,31-43
-function,_git_dir,def _git_dir(root: str) -> str,46-51
-function,_writable_dir,def _writable_dir(path: str) -> bool,54-63
-function,cache_path,def cache_path(root: str) -> str,66-79
-function,cache_kind,"def cache_kind(path: str, root: str) -> str",82-90
-function,is_cache_dir,"def is_cache_dir(path: str, root: str='') -> bool",93-103
-function,_work_root_for,"def _work_root_for(path: str, hint: str='') -> str",106-128
-function,resolve_doc,"def resolve_doc(target=None, root=None)",131-151
-function,ensure_doc,"def ensure_doc(target=None, root=None, session=None, session_key: str='', write: bool=True)",154-178
-function,_write_owner,"def _write_owner(path: str, work_root: str) -> None",181-195
-|calls[17]{caller,callee,module}
+function,_git_pointer,def _git_pointer(root: str) -> str,46-68
+function,_common_git_dir,def _common_git_dir(git_dir: str) -> str,71-92
+function,_git_dir,def _git_dir(root: str) -> str,95-114
+function,_writable_dir,def _writable_dir(path: str) -> bool,117-126
+function,cache_path,def cache_path(root: str) -> str,129-142
+function,cache_kind,"def cache_kind(path: str, root: str) -> str",145-156
+function,is_cache_dir,"def is_cache_dir(path: str, root: str='') -> bool",159-169
+function,_work_root_for,"def _work_root_for(path: str, hint: str='') -> str",172-195
+function,resolve_doc,"def resolve_doc(target=None, root=None)",198-218
+function,ensure_doc,"def ensure_doc(target=None, root=None, session=None, session_key: str='', write: bool=True)",221-245
+function,_write_owner,"def _write_owner(path: str, work_root: str) -> None",248-260
+|calls[19]{caller,callee,module}
+_git_dir,_git_pointer,.
+_git_dir,_common_git_dir,.
 cache_path,_git_dir,.
 cache_path,_writable_dir,.
 cache_path,cache_root,.
@@ -167,15 +209,15 @@ _write_owner,_atomic_write,src/tier/models.py
 = file
   path src/tier/cli.py
   language python
-  lines 464
-  sha256 8312063ab4998324
-  mtime 1794568350969164046
-  size 20224
+  lines 467
+  sha256 370b9cf1157dd7f8
+  mtime 1794574209291940636
+  size 20449
 |symbols[4]{kind,name,signature,lines}
 function,_stdin_text,def _stdin_text() -> str,26-30
 function,_resolve_target,def _resolve_target(target),33-41
 function,_split_slice_args,"def _split_slice_args(file_arg, module, symbols)",43-62
-function,main,def main(argv=None),65-464
+function,main,def main(argv=None),65-467
 |calls[30]{caller,callee,module}
 _resolve_target,ensure_doc,src/tier/cache.py
 main,default_ui,src/tier/ui.py
@@ -227,26 +269,31 @@ main,to_obj,src/tier/parser.py
 = file
   path src/tier/context.py
   language python
-  lines 210
-  sha256 2a71cce18b3345e7
-  mtime 1794568605722541446
-  size 7625
-|symbols[5]{kind,name,signature,lines}
+  lines 266
+  sha256 bb45b508fd484107
+  mtime 1794574021821813960
+  size 9820
+|symbols[7]{kind,name,signature,lines}
 function,_count,"def _count(text: str, fast=None) -> int",27-28
 function,_symbol_hits,"def _symbol_hits(doc: Doc, query: str) -> list",31-62
-function,_impact_block,"def _impact_block(doc: Doc, root: str, target_id: str, symbol: str='') -> str",65-90
-function,build_context,"def build_context(target=None, query: str='', *, root=None, budget_tokens: int=DEFAULT_BUDGET, include_impact: bool=True, session: Session=None, session_key: str='', dedup: bool=True, fast=None) -> dict",93-200
-function,_render_section,"def _render_section(doc: Doc, sid: str, session: Session, key: str, dedup: bool) -> str",203-210
-|calls[14]{caller,callee,module}
+function,_call_neighbourhood,"def _call_neighbourhood(doc: Doc, targets: list) -> set",65-79
+function,_calls_filter_for,"def _calls_filter_for(doc: Doc, targets: list, mode: str='auto')",82-111
+function,_impact_block,"def _impact_block(doc: Doc, root: str, target_id: str, symbol: str='') -> str",114-139
+function,build_context,"def build_context(target=None, query: str='', *, root=None, budget_tokens: int=DEFAULT_BUDGET, include_impact: bool=True, session: Session=None, session_key: str='', dedup: bool=True, fast=None, include_calls: str='auto') -> dict",142-255
+function,_render_section,"def _render_section(doc: Doc, sid: str, session: Session, key: str, dedup: bool, calls_filter=None) -> str",258-266
+|calls[17]{caller,callee,module}
 _count,count_tokens,src/tier/tokens.py
 _symbol_hits,_symbol_rows,src/tier/repo.py
 _symbol_hits,_index_tokens,src/tier/retrieval.py
+_call_neighbourhood,_call_graph,src/tier/repo.py
 _impact_block,impact,src/tier/repo.py
 build_context,ensure_doc,src/tier/cache.py
 build_context,find,src/tier/retrieval.py
 build_context,is_repo_doc,src/tier/parser.py
+build_context,_calls_filter_for,.
 build_context,_count,.
 build_context,_symbol_hits,.
+build_context,_symbol_key,src/tier/repo.py
 build_context,_render_section,.
 build_context,_impact_block,.
 build_context,_clip,src/tier/models.py
@@ -634,28 +681,33 @@ remember,Section,src/tier/models.py
 = file
   path src/tier/models.py
   language python
-  lines 159
-  sha256 5063fd8f1a576f78
-  mtime 1794568747113466892
-  size 5470
-|symbols[13]{kind,name,signature,lines}
-function,_table_count,def _table_count(raw) -> int,23-28
-function,_csv_cells,"def _csv_cells(line: str, strict: bool=False) -> list",31-41
-function,_table_rows,"def _table_rows(lines: list, i: int, n: int) -> list",44-45
-function,_render_table,"def _render_table(name: str, cols: list, rows: list, mode: str) -> list",48-63
-function,render_lines,"def render_lines(lines: list, table_mode: str='raw') -> list",66-83
-function,_clip,"def _clip(s: str, n: int) -> str",86-90
-function,_read_text,def _read_text(path: str) -> str,93-95
-function,_atomic_write,"def _atomic_write(path: str, text: str) -> None",98-122
-function,_inside,"def _inside(root: str, path: str) -> bool",125-128
-class,Section,class Section,131-148
-method,Section.text,"def text(self, table_mode: str='raw') -> str",140-148
-class,Doc,class Doc,151-159
-method,Doc.by_id,def by_id(self) -> dict,158-159
-|calls[6]{caller,callee,module}
+  lines 202
+  sha256 16f115c07db6ecaf
+  mtime 1794574125779279305
+  size 7166
+|symbols[15]{kind,name,signature,lines}
+function,_table_count,def _table_count(raw) -> int,24-29
+function,_csv_cells,"def _csv_cells(line: str, strict: bool=False) -> list",32-42
+function,_table_rows,"def _table_rows(lines: list, i: int, n: int) -> list",45-46
+function,_render_table,"def _render_table(name: str, cols: list, rows: list, mode: str) -> list",49-64
+function,_filter_call_rows,"def _filter_call_rows(lines: list, i: int, n: int, keep) -> list",70-86
+function,_csv_row,def _csv_row(cells: list) -> str,89-93
+function,render_lines,"def render_lines(lines: list, table_mode: str='raw', calls_filter=None) -> list",96-126
+function,_clip,"def _clip(s: str, n: int) -> str",129-133
+function,_read_text,def _read_text(path: str) -> str,136-138
+function,_atomic_write,"def _atomic_write(path: str, text: str) -> None",141-165
+function,_inside,"def _inside(root: str, path: str) -> bool",168-171
+class,Section,class Section,174-191
+method,Section.text,"def text(self, table_mode: str='raw', calls_filter=None) -> str",183-191
+class,Doc,class Doc,194-202
+method,Doc.by_id,def by_id(self) -> dict,201-202
+|calls[9]{caller,callee,module}
 _table_rows,_csv_cells,.
+_filter_call_rows,_table_rows,.
+_filter_call_rows,_csv_row,.
 render_lines,_render_table,.
 render_lines,_table_count,.
+render_lines,_filter_call_rows,.
 render_lines,_table_rows,.
 Section,render_lines,.
 Section.text,render_lines,.
@@ -665,9 +717,9 @@ Section.text,render_lines,.
   path src/tier/parser.py
   language python
   lines 301
-  sha256 cb4a28a6ca982f2e
-  mtime 1577817001000000000
-  size 9853
+  sha256 0821a41684393282
+  mtime 1794572912295860455
+  size 9886
 |symbols[14]{kind,name,signature,lines}
 function,_data_open,def _data_open(line: str),13-18
 function,_data_closes,"def _data_closes(line: str, guard: str) -> bool",21-24
@@ -677,7 +729,7 @@ function,_kv_split,def _kv_split(s: str),133-135
 function,_parse_kv,"def _parse_kv(first: str, kids: list) -> dict",138-161
 function,nodes,def nodes(sec: Section) -> list,164-211
 function,_live_lines,def _live_lines(lines: list) -> list,214-238
-function,render_section,"def render_section(sec: Section, table_mode: str='raw') -> str",241-242
+function,render_section,"def render_section(sec: Section, table_mode: str='raw', calls_filter=None) -> str",241-242
 function,to_obj,def to_obj(doc: Doc) -> dict,245-253
 function,dumps,"def dumps(doc: Doc, pretty: bool=False) -> str",256-280
 function,_repo_file_meta,def _repo_file_meta(sec: Section) -> dict,283-292
@@ -864,7 +916,7 @@ function,_git_changed_paths,def _git_changed_paths(root: str),1522-1559
 function,_changed_symbols,"def _changed_symbols(old_rows: list, ext: str, text: str)",1562-1570
 function,impact,"def impact(doc: Doc, target: str, root: str=None, git: bool=False) -> dict",1573-1670
 function,render_impact,def render_impact(result: dict) -> str,1673-1694
-|calls[119]{caller,callee,module}
+|calls[117]{caller,callee,module}
 _active_source_exts,_ts_available,.
 repo_source_files,_active_source_exts,.
 _register_py_module,_py_module_name,.
@@ -912,8 +964,6 @@ _extract_calls,_py_call_names,.
 _finalize_calls,_build_symbol_index,.
 _finalize_calls,_symbol_rows,.
 _finalize_calls,_resolve_calls,.
-_call_table,_csv_row,src/tier/converter.py
-_symbol_table,_csv_row,src/tier/converter.py
 _go_module,_read_text,src/tier/models.py
 _repo_info,_extract_symbols,.
 _repo_info,_read_text,src/tier/models.py
@@ -993,10 +1043,10 @@ impact,_sha256,.
 = file
   path src/tier/retrieval.py
   language python
-  lines 380
-  sha256 d9fa1e3831817adf
-  mtime 1794543944745873113
-  size 13661
+  lines 385
+  sha256 99466e9415dee025
+  mtime 1794572912295982465
+  size 13849
 |symbols[22]{kind,name,signature,lines}
 function,_norm,def _norm(w: str) -> str,54-61
 function,split_identifier,def split_identifier(token: str) -> list,64-83
@@ -1008,18 +1058,18 @@ function,_trigram_sim,"def _trigram_sim(a: str, b: str) -> float",126-128
 function,_rule_count,def _rule_count(sec: Section) -> int,131-132
 function,index,"def index(doc: Doc, tokens: bool=True, fast: bool=None) -> str",135-152
 function,resolve,"def resolve(doc: Doc, ids: list, follow: bool=False)",155-170
-function,get,"def get(doc: Doc, ids: list, follow: bool=False, table_mode: str='raw')",173-177
-class,Session,class Session,180-222
-method,Session.__init__,def __init__(self),183-184
-method,Session.reset,"def reset(self, key=None)",186-190
-method,Session.invalidate,"def invalidate(self, key: str, section_id: str)",192-201
-method,Session.mark,"def mark(self, key: str, entry: str)",203-204
-method,Session.is_marked,"def is_marked(self, key: str, entry: str) -> bool",206-207
-method,Session.get,"def get(self, doc: Doc, ids: list, follow: bool=False, table_mode: str='raw', key: str='', force: bool=False)",209-222
-function,_find_legacy,"def _find_legacy(doc: Doc, query: str, k: int=3)",225-257
-function,_is_test_module,def _is_test_module(sec: Section) -> bool,260-271
-function,_is_navigation_section,def _is_navigation_section(sec: Section) -> bool,274-276
-function,find,"def find(doc: Doc, query: str, k: int=3, legacy: bool=False)",279-380
+function,get,"def get(doc: Doc, ids: list, follow: bool=False, table_mode: str='raw', calls_filter=None)",173-182
+class,Session,class Session,185-227
+method,Session.__init__,def __init__(self),188-189
+method,Session.reset,"def reset(self, key=None)",191-195
+method,Session.invalidate,"def invalidate(self, key: str, section_id: str)",197-206
+method,Session.mark,"def mark(self, key: str, entry: str)",208-209
+method,Session.is_marked,"def is_marked(self, key: str, entry: str) -> bool",211-212
+method,Session.get,"def get(self, doc: Doc, ids: list, follow: bool=False, table_mode: str='raw', key: str='', force: bool=False, calls_filter=None)",214-227
+function,_find_legacy,"def _find_legacy(doc: Doc, query: str, k: int=3)",230-262
+function,_is_test_module,def _is_test_module(sec: Section) -> bool,265-276
+function,_is_navigation_section,def _is_navigation_section(sec: Section) -> bool,279-281
+function,find,"def find(doc: Doc, query: str, k: int=3, legacy: bool=False)",284-385
 |calls[26]{caller,callee,module}
 _index_tokens,split_identifier,.
 _query_terms,_index_tokens,.
@@ -1173,9 +1223,9 @@ default_ui,UI,.
   path src/tier/mcp/sdk_server.py
   language python
   lines 183
-  sha256 b035d03b1f7cb67b
-  mtime 1794568108299415313
-  size 7041
+  sha256 3ca356cc6efd8b10
+  mtime 1794574209291833436
+  size 7102
 |symbols[5]{kind,name,signature,lines}
 class,MissingSDKError,class MissingSDKError(RuntimeError),17-18
 function,_load_server_class,def _load_server_class(),21-34
@@ -1194,22 +1244,22 @@ main,build_server,.
 = file
   path src/tier/mcp/server.py
   language python
-  lines 549
-  sha256 10edf47e954a3b96
-  mtime 1794568069791257846
-  size 22926
+  lines 557
+  sha256 426192c98e249842
+  mtime 1794574209291686636
+  size 23364
 |symbols[11]{kind,name,signature,lines}
-function,safe_target,def safe_target(path: str='') -> str,232-240
-function,safe,def safe(path: str) -> str,243-249
-function,safe_dir,def safe_dir(path: str) -> str,252-258
-function,safe_write,def safe_write(path: str) -> str,261-269
-function,load,def load(path: str) -> Doc,272-274
-function,_repo_signature,"def _repo_signature(p: str, doc: Doc) -> dict",277-297
-function,_signature_matches,def _signature_matches(sig: dict) -> bool,300-314
-function,_load_doc,"def _load_doc(path: str, auto_sync: bool=True)",317-351
-function,call,"def call(name: str, a: dict) -> str",354-478
-function,handle,def handle(msg: dict),481-512
-function,main,def main(),515-545
+function,safe_target,def safe_target(path: str='') -> str,239-247
+function,safe,def safe(path: str) -> str,250-256
+function,safe_dir,def safe_dir(path: str) -> str,259-265
+function,safe_write,def safe_write(path: str) -> str,268-276
+function,load,def load(path: str) -> Doc,279-281
+function,_repo_signature,"def _repo_signature(p: str, doc: Doc) -> dict",284-304
+function,_signature_matches,def _signature_matches(sig: dict) -> bool,307-321
+function,_load_doc,"def _load_doc(path: str, auto_sync: bool=True)",324-358
+function,call,"def call(name: str, a: dict) -> str",361-486
+function,handle,def handle(msg: dict),489-520
+function,main,def main(),523-553
 |calls[41]{caller,callee,module}
 safe_target,_inside,src/tier/models.py
 safe,_inside,src/tier/models.py
@@ -1404,9 +1454,9 @@ SDKAdapterTests.test_all_twelve_tools_register_and_call,_put,.
   path tests/test_tier.py
   language python
   lines 1946
-  sha256 4a1dfdb8f0d17511
-  mtime 1794570365044129916
-  size 95195
+  sha256 97eccd0052950f44
+  mtime 1794574103532343022
+  size 95205
 |symbols[115]{kind,name,signature,lines}
 class,T,class T(unittest.TestCase),22-818
 method,T.rt,"def rt(self, text)",23-25
@@ -1604,15 +1654,15 @@ PerfAndSafety.test_mcp_list_batches_token_counting,_put,.
 > src-tier-mcp-server.py
 > src-tier-tokens.py
 @tests-test_v110.py tests/test_v110.py
-? Tests for v1.1.0: composite context, repository cache, call graph, tree-sitter.; symbols: ContextTests, CacheTests, CallGraphTests, TreeSitterTests, InstallerSkillTests
+? Tests for v1.1.0: composite context, repository cache, call graph, tree-sitter.; symbols: ContextTests, WorktreeCacheTests, CallFilterTests, CacheTests, CallGraphTests, TreeSitterTests, InstallerSkillTests
 = file
   path tests/test_v110.py
   language python
-  lines 454
-  sha256 f5eadb85c1720d83
-  mtime 1794568605722711946
-  size 20198
-|symbols[41]{kind,name,signature,lines}
+  lines 662
+  sha256 4ff98a91efc0dd91
+  mtime 1794574180113756752
+  size 30725
+|symbols[59]{kind,name,signature,lines}
 function,_put,"def _put(root, name, text)",24-31
 function,_read,def _read(path),34-36
 function,_tokens,def _tokens(text),39-40
@@ -1626,35 +1676,53 @@ method,ContextTests.test_context_no_dedup_resends,def test_context_no_dedup_rese
 method,ContextTests.test_context_requires_query,def test_context_requires_query(self),106-110
 method,ContextTests.test_context_on_plain_tier_doc,def test_context_on_plain_tier_doc(self),112-120
 method,ContextTests.test_cli_context_command,def test_cli_context_command(self),122-139
-class,CacheTests,class CacheTests(unittest.TestCase),142-256
-method,CacheTests.test_tracked_repo_tier_wins,def test_tracked_repo_tier_wins(self),143-151
-method,CacheTests.test_git_info_cache_used_inside_worktree,def test_git_info_cache_used_inside_worktree(self),153-160
-method,CacheTests.test_git_cache_keeps_git_status_clean,def test_git_cache_keeps_git_status_clean(self),162-178
-method,CacheTests.test_cache_fallback_outside_git,def test_cache_fallback_outside_git(self),180-200
-method,CacheTests.test_auto_create_then_auto_sync,def test_auto_create_then_auto_sync(self),202-213
-method,CacheTests.test_is_cache_dir_filters_listings,def test_is_cache_dir_filters_listings(self),215-220
-method,CacheTests.test_mcp_tier_context_accepts_directory,def test_mcp_tier_context_accepts_directory(self),222-240
-method,CacheTests.test_mcp_tools_include_context_first,def test_mcp_tools_include_context_first(self),242-248
-method,CacheTests.test_cache_escapes_are_rejected,def test_cache_escapes_are_rejected(self),250-256
-class,CallGraphTests,class CallGraphTests(unittest.TestCase),259-358
-method,CallGraphTests.test_python_cross_module_call_edge,def test_python_cross_module_call_edge(self),260-271
-method,CallGraphTests.test_impact_reports_symbol_callers,def test_impact_reports_symbol_callers(self),273-283
-method,CallGraphTests.test_impact_reports_symbol_calls,def test_impact_reports_symbol_calls(self),285-290
-method,CallGraphTests.test_call_edges_present_for_ts_go_rust,def test_call_edges_present_for_ts_go_rust(self),292-309
-method,CallGraphTests.test_calls_table_omitted_when_empty,def test_calls_table_omitted_when_empty(self),311-318
-method,CallGraphTests.test_calls_table_round_trips_and_lints,def test_calls_table_round_trips_and_lints(self),320-326
-method,CallGraphTests.test_sync_preserves_and_refreshes_call_edges,def test_sync_preserves_and_refreshes_call_edges(self),328-344
-method,CallGraphTests.test_added_file_does_not_reorder_untouched_sections,def test_added_file_does_not_reorder_untouched_sections(self),346-358
-class,TreeSitterTests,class TreeSitterTests(unittest.TestCase),361-443
-method,TreeSitterTests.tearDown,def tearDown(self),362-363
-method,TreeSitterTests.test_absent_extra_falls_back_to_stdlib,def test_absent_extra_falls_back_to_stdlib(self),365-370
-method,TreeSitterTests.test_ts_only_extensions_hidden_without_extra,def test_ts_only_extensions_hidden_without_extra(self),372-379
-method,TreeSitterTests.test_ts_only_extensions_visible_with_extra,def test_ts_only_extensions_visible_with_extra(self),381-389
-method,TreeSitterTests.test_mocked_pack_is_used_and_failure_falls_back,def test_mocked_pack_is_used_and_failure_falls_back(self),391-433
-method,TreeSitterTests.test_doctor_reports_treesitter,def test_doctor_reports_treesitter(self),435-443
-class,InstallerSkillTests,class InstallerSkillTests(unittest.TestCase),446-450
-method,InstallerSkillTests.test_skill_mentions_context_tool,def test_skill_mentions_context_tool(self),447-450
-|calls[40]{caller,callee,module}
+class,WorktreeCacheTests,class WorktreeCacheTests(unittest.TestCase),142-267
+method,WorktreeCacheTests.test_git_pointer_file_resolves_to_its_own_gitdir,def test_git_pointer_file_resolves_to_its_own_gitdir(self),145-156
+method,WorktreeCacheTests.test_relative_git_pointer_is_resolved_against_checkout,def test_relative_git_pointer_is_resolved_against_checkout(self),158-164
+method,WorktreeCacheTests.test_broken_pointer_falls_back_to_user_cache,def test_broken_pointer_falls_back_to_user_cache(self),166-181
+method,WorktreeCacheTests.test_read_only_gitdir_falls_back_to_user_cache,def test_read_only_gitdir_falls_back_to_user_cache(self),183-200
+method,WorktreeCacheTests.test_owner_manifest_restores_root_for_out_of_tree_map,def test_owner_manifest_restores_root_for_out_of_tree_map(self),202-214
+method,WorktreeCacheTests.test_real_worktree_shares_nothing_and_stays_clean,def test_real_worktree_shares_nothing_and_stays_clean(self),216-267
+class,CallFilterTests,class CallFilterTests(unittest.TestCase),270-347
+method,CallFilterTests._doc,"def _doc(self, td)",273-279
+method,CallFilterTests.test_filter_keeps_only_matching_callers,def test_filter_keeps_only_matching_callers(self),281-288
+method,CallFilterTests.test_filter_none_keeps_the_stored_table,def test_filter_none_keeps_the_stored_table(self),290-295
+method,CallFilterTests.test_filter_all_mode_is_unfiltered,def test_filter_all_mode_is_unfiltered(self),297-300
+method,CallFilterTests.test_filter_none_mode_drops_the_table,def test_filter_none_mode_drops_the_table(self),302-307
+method,CallFilterTests.test_empty_result_omits_the_table_entirely,def test_empty_result_omits_the_table_entirely(self),309-316
+method,CallFilterTests.test_filtered_render_still_parses_and_lints,def test_filtered_render_still_parses_and_lints(self),318-325
+method,CallFilterTests.test_impact_still_reads_the_full_table,def test_impact_still_reads_the_full_table(self),327-332
+method,CallFilterTests.test_context_uses_the_filter_and_respects_budget,def test_context_uses_the_filter_and_respects_budget(self),334-339
+method,CallFilterTests.test_context_include_calls_all_keeps_full_table,def test_context_include_calls_all_keeps_full_table(self),341-347
+class,CacheTests,class CacheTests(unittest.TestCase),350-464
+method,CacheTests.test_tracked_repo_tier_wins,def test_tracked_repo_tier_wins(self),351-359
+method,CacheTests.test_git_info_cache_used_inside_worktree,def test_git_info_cache_used_inside_worktree(self),361-368
+method,CacheTests.test_git_cache_keeps_git_status_clean,def test_git_cache_keeps_git_status_clean(self),370-386
+method,CacheTests.test_cache_fallback_outside_git,def test_cache_fallback_outside_git(self),388-408
+method,CacheTests.test_auto_create_then_auto_sync,def test_auto_create_then_auto_sync(self),410-421
+method,CacheTests.test_is_cache_dir_filters_listings,def test_is_cache_dir_filters_listings(self),423-428
+method,CacheTests.test_mcp_tier_context_accepts_directory,def test_mcp_tier_context_accepts_directory(self),430-448
+method,CacheTests.test_mcp_tools_include_context_first,def test_mcp_tools_include_context_first(self),450-456
+method,CacheTests.test_cache_escapes_are_rejected,def test_cache_escapes_are_rejected(self),458-464
+class,CallGraphTests,class CallGraphTests(unittest.TestCase),467-566
+method,CallGraphTests.test_python_cross_module_call_edge,def test_python_cross_module_call_edge(self),468-479
+method,CallGraphTests.test_impact_reports_symbol_callers,def test_impact_reports_symbol_callers(self),481-491
+method,CallGraphTests.test_impact_reports_symbol_calls,def test_impact_reports_symbol_calls(self),493-498
+method,CallGraphTests.test_call_edges_present_for_ts_go_rust,def test_call_edges_present_for_ts_go_rust(self),500-517
+method,CallGraphTests.test_calls_table_omitted_when_empty,def test_calls_table_omitted_when_empty(self),519-526
+method,CallGraphTests.test_calls_table_round_trips_and_lints,def test_calls_table_round_trips_and_lints(self),528-534
+method,CallGraphTests.test_sync_preserves_and_refreshes_call_edges,def test_sync_preserves_and_refreshes_call_edges(self),536-552
+method,CallGraphTests.test_added_file_does_not_reorder_untouched_sections,def test_added_file_does_not_reorder_untouched_sections(self),554-566
+class,TreeSitterTests,class TreeSitterTests(unittest.TestCase),569-651
+method,TreeSitterTests.tearDown,def tearDown(self),570-571
+method,TreeSitterTests.test_absent_extra_falls_back_to_stdlib,def test_absent_extra_falls_back_to_stdlib(self),573-578
+method,TreeSitterTests.test_ts_only_extensions_hidden_without_extra,def test_ts_only_extensions_hidden_without_extra(self),580-587
+method,TreeSitterTests.test_ts_only_extensions_visible_with_extra,def test_ts_only_extensions_visible_with_extra(self),589-597
+method,TreeSitterTests.test_mocked_pack_is_used_and_failure_falls_back,def test_mocked_pack_is_used_and_failure_falls_back(self),599-641
+method,TreeSitterTests.test_doctor_reports_treesitter,def test_doctor_reports_treesitter(self),643-651
+class,InstallerSkillTests,class InstallerSkillTests(unittest.TestCase),654-658
+method,InstallerSkillTests.test_skill_mentions_context_tool,def test_skill_mentions_context_tool(self),655-658
+|calls[59]{caller,callee,module}
 _two_module_repo,_put,.
 ContextTests,_two_module_repo,.
 ContextTests,_put,.
@@ -1668,6 +1736,25 @@ ContextTests.test_context_no_dedup_resends,_two_module_repo,.
 ContextTests.test_context_requires_query,_two_module_repo,.
 ContextTests.test_context_on_plain_tier_doc,_put,.
 ContextTests.test_cli_context_command,_two_module_repo,.
+WorktreeCacheTests,_put,.
+WorktreeCacheTests.test_git_pointer_file_resolves_to_its_own_gitdir,_put,.
+WorktreeCacheTests.test_relative_git_pointer_is_resolved_against_checkout,_put,.
+WorktreeCacheTests.test_broken_pointer_falls_back_to_user_cache,_put,.
+WorktreeCacheTests.test_read_only_gitdir_falls_back_to_user_cache,_put,.
+WorktreeCacheTests.test_owner_manifest_restores_root_for_out_of_tree_map,_put,.
+WorktreeCacheTests.test_real_worktree_shares_nothing_and_stays_clean,_put,.
+CallFilterTests,_put,.
+CallFilterTests,_doc,.
+CallFilterTests._doc,_put,.
+CallFilterTests.test_filter_keeps_only_matching_callers,_doc,.
+CallFilterTests.test_filter_none_keeps_the_stored_table,_doc,.
+CallFilterTests.test_filter_all_mode_is_unfiltered,_doc,.
+CallFilterTests.test_filter_none_mode_drops_the_table,_doc,.
+CallFilterTests.test_empty_result_omits_the_table_entirely,_doc,.
+CallFilterTests.test_filtered_render_still_parses_and_lints,_doc,.
+CallFilterTests.test_impact_still_reads_the_full_table,_doc,.
+CallFilterTests.test_context_uses_the_filter_and_respects_budget,_doc,.
+CallFilterTests.test_context_include_calls_all_keeps_full_table,_doc,.
 CacheTests,_put,.
 CacheTests,_two_module_repo,.
 CacheTests,_read,.

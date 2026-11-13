@@ -4,6 +4,24 @@ Notable changes to TIER, newest first. Entries follow the spirit of [Keep a Chan
 
 The distribution is published as `tier-ctx`; the import package, the CLI command, and the format extension are all `tier`.
 
+## [1.2.0]
+
+### Added
+
+- `glama.json` and a `Dockerfile`, so TIER can be deployed through Glama and run as a containerised MCP server.
+- PyPI Trusted Publishing release workflow: tagged releases publish `tier-ctx` with a short-lived OIDC token instead of a stored API key.
+- `benchmarks/agent_ab.py`, an agent-workflow comparison (Track J) that runs the same task against a plain repository and against its TIER map and reports the tokens each turn spends.
+- `SKILL.md` at the repository root as the canonical Agent Skill; `tier install --clients skills` writes a per-project copy of it.
+
+### Changed
+
+- `tier_context` filters `|calls` tables to the 1-hop symbol neighbourhood of the sections it returns, which leaves more of the budget for L2 bodies and L3 slices. Pass `include_calls="all"` to opt out and emit every recorded edge. `tier impact` is unaffected and always reports the full caller and callee set.
+- The format specification moved from `SPEC.md` to `docs/spec.md`. `SPEC.tier` is built from the new path and every link now points there.
+
+### Fixed
+
+- The repository cache resolves through a `.git` pointer file. Linked `git worktree` checkouts and submodules previously fell through to the per-root user cache because `.git` is not a directory there; they now place the map under their own git directory, and the owning root is recovered from the `.owner` manifest rather than from a literal `.git/info/tier/` path.
+
 ## [1.1.0]
 
 ### Added

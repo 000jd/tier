@@ -83,6 +83,14 @@ These are the rules from [ARCHITECTURE.md](ARCHITECTURE.md). They are not stylis
 - **Test every boundary.** Add a unit or red-team test for every parser, guard, path, symbol-range, installer, or config-merge change. The `Audit` class in `tests/test_tier.py` exists for adversarial cases: guard collision, path traversal, parser state-machine abuse, and slice boundaries across languages.
 - **Refresh the indexes.** Regenerate `repo.tier`, `SPEC.tier`, and `benchmarks/BENCH.txt` when source or benchmarks change. See [Refreshing checked-in artifacts](#refreshing-checked-in-artifacts).
 
+### Repository cache resolution
+
+A repository map is a derived artifact, so `src/tier/cache.py` resolves its location in a fixed order: an explicit `.tier` path, then a tracked `<root>/repo.tier`, then `.git/info/tier/repo.tier`, and finally a per-root directory under `~/.cache/tier/`. The `.git/info` case is the normal one, and it is why `git status` stays clean without a `.gitignore` entry.
+
+`_git_dir` handles both layouts Git can produce. When `.git` is a directory it is read directly; when `.git` is a pointer file — as in a `git worktree` checkout, where it holds `gitdir: <main>/.git/worktrees/<name>`, or in a submodule, where it holds `gitdir: <super>/.git/modules/<name>` — the target is resolved relative to the directory containing `.git`, the same rule Git itself applies. The per-checkout admin directory is used as-is rather than collapsed to the shared common directory: worktrees exist to hold different branches, so one shared map would be invalidated on every checkout switch.
+
+Because a linked worktree's gitdir lives outside the checkout entirely, the path alone no longer identifies the repository the map describes. `_work_root_for` therefore reads the `.owner` manifest written beside the map, and `cache_kind` and `is_cache_dir` match on the `info/tier` segment rather than on a literal `.git`. Keep both properties when touching this module: a map must be found again from its cache path, and directory listings must skip the cache.
+
 ## Adding a language extractor
 
 Symbol extraction has two paths and one shared contract.
@@ -111,10 +119,16 @@ A tool is one addition in three places plus documentation.
 
 1. **`src/tier/mcp/server.py`** — append an entry to `TOOLS` with `name`, `description`, and a JSON Schema `inputSchema`, then add a branch to `call(name, a)`. `call` receives already-validated-but-untrusted arguments; coerce and reject there, and remember that every path must be confined with `safe_target`/`_inside`.
 2. **`src/tier/mcp/sdk_server.py`** — add `@mcp.tool(name=..., description=_description(...))` to the decorated function set inside `build_server`. `_description()` reads the same `TOOLS` entry, so the description is not duplicated. A tool present in one server and absent from the other is a defect: the two servers are advertised as exposing the same surface.
-3. **Docs** — the MCP section of `SPEC.md`, the tool table in `README.md`, and the `SKILL.md` tool table that `installer.py` generates.
+3. **Docs** — the MCP section of `docs/spec.md`, the tool table in `README.md`, and the `SKILL.md` tool table that `installer.py` generates.
 4. **A test** — extend the stdio surface test in `tests/test_tier.py::T.test_mcp_tool_surface_and_repo`, and update the count assertion in `tests/test_installer.py::SDKAdapterTests::test_all_twelve_tools_register_and_call`, which asserts `len(srv.tools) == 12` and that `tier_context` registers first. `tests/test_v110.py::CacheTests::test_mcp_tools_include_context_first` encodes the same ordering assumption.
 
 MCP server code must stay dependency-free and must not import `src/tier/mcp/sdk_server.py`.
+
+### Call-table filtering in `tier context`
+
+`build_context` takes an `include_calls` argument, surfaced as `include_calls` on the `tier_context` MCP tool, that controls how `|calls` tables are rendered. The default (`"auto"`) keeps only edges inside the 1-hop symbol neighbourhood of the matched sections, which is what a single question needs and what leaves the token budget for L2 bodies and L3 slices. Pass `include_calls="all"` to emit every edge the module's map records, or `"none"` for the header alone.
+
+The filter runs at render time only: the stored map keeps every edge, `tier sync` preserves them, and the emitted row count is rewritten so the table stays valid. `tier impact` never goes through this path — it reads the parsed document directly — so `module#symbol` callers and calls are always reported in full. A blast-radius report that silently dropped edges would be worse than useless.
 
 ## Adding an installer client
 
@@ -151,13 +165,15 @@ Exact `o200k_base` counts require `node` and `npm install` inside `benchmarks/`;
 
 Track descriptions, methodology, and how to read the output are in [benchmarks/README.md](benchmarks/README.md). The checked-in result of the last run is [benchmarks/BENCH.txt](benchmarks/BENCH.txt).
 
+`benchmarks/agent_ab.py` is a separate comparison (Track J): it runs the same agent workflow against a plain repository and against its TIER map and reports the tokens each turn spends. It writes to stdout and does not touch the checked-in transcript.
+
 ## Refreshing checked-in artifacts
 
 Four `.tier` files and one benchmark transcript are checked in. Regenerate them after changing parsers, converters, symbol extraction, repository behavior, the CLI surface, or the benchmarks:
 
 ```sh
 # Rebuild the format specification and the self-index.
-tier from-md SPEC.md -o SPEC.tier
+tier from-md docs/spec.md -o SPEC.tier
 tier from-repo . -o repo.tier
 
 # Bring the map to the current tree (twice, so the stat cache cannot mask an edit).
@@ -177,6 +193,6 @@ tier doctor .
 python3 benchmarks/bench.py
 ```
 
-The version string moves in one step: `VERSION` in `src/tier/models.py`, `version` in `pyproject.toml` and `benchmarks/package.json`, the `%tier` header and title of `SPEC.tier`, `repo.tier`, and `examples/payments-runbook.tier`, and the version cited in `README.md` and `SPEC.md`. `tests/test_tier.py::T.test_pyproject_and_version_metadata` asserts each of those in a single test, so a partial bump fails immediately.
+The version string moves in one step: `VERSION` in `src/tier/models.py`, `version` in `pyproject.toml` and `benchmarks/package.json`, the `%tier` header and title of `SPEC.tier`, `repo.tier`, and `examples/payments-runbook.tier`, and the version cited in `README.md` and `docs/spec.md`. `tests/test_tier.py::T.test_pyproject_and_version_metadata` asserts each of those in a single test, so a partial bump fails immediately.
 
 **CI fails if `repo.tier` is stale.** On Linux the workflow runs `tier sync repo.tier`, then `tier sync repo.tier --rehash`, then `git diff --exit-code -- repo.tier`. Any difference fails the job with a pointer to `tier from-repo . -o repo.tier`. The same job runs `tier doctor .` and lints all four documents. Note that CI installs no extras, so a map that changes depending on whether Tree-sitter is present will fail this gate.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tier-ctx"
-version = "1.1.0"
+version = "1.2.0"
 description = "TIER: layered context, repository graphs, code slicing, and agent memory"
 readme = "README.md"
 requires-python = ">=3.10"

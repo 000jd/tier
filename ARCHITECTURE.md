@@ -2,7 +2,7 @@
 
 TIER is a four-layer context format plus a local retrieval, repository-graph, and agent-memory engine. The reference implementation is a Python 3.10+ `src/`-layout package with a **stdlib-only core**. Optional extras add terminal styling (`rich`) and the official MCP SDK adapter (`mcp`), but importing or running the core never requires them.
 
-See [SPEC.md](SPEC.md) for the file format and retrieval rules.
+See [docs/spec.md](docs/spec.md) for the file format and retrieval rules.
 
 ## Layer model
 
@@ -108,7 +108,7 @@ After changing parsers, converters, symbol extraction, or repository behavior:
 
 ```sh
 tier from-repo . -o repo.tier
-tier from-md SPEC.md -o SPEC.tier
+tier from-md docs/spec.md -o SPEC.tier
 tier lint repo.tier
 tier lint SPEC.tier
 tier lint examples/handbook.tier
@@ -141,4 +141,4 @@ tier lint examples/payments-runbook.tier
 | CLI commands/flags | `cli.py` |
 | MCP tools | `mcp/server.py` and `mcp/sdk_server.py` |
 
-When adding an MCP tool, add it to both servers and update `SPEC.md`, the README tool reference, and the MCP tests. When adding an installer client, add its config path/key, a platform-path test, a merge/backup test, and a doctor test.
+When adding an MCP tool, add it to both servers and update `docs/spec.md`, the README tool reference, and the MCP tests. When adding an installer client, add its config path/key, a platform-path test, a merge/backup test, and a doctor test.

@@ -1,0 +1,97 @@
+name: Release
+
+# PyPI Trusted Publishing on a `v*` tag. No API token or password is stored:
+# the publish job mints a short-lived OIDC token and PyPI exchanges it for an
+# upload scoped to this repository, workflow, and environment.
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Gate: the tag must point at a tree that installs, tests, and lints clean.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: python -m pip install -e .
+
+      - name: Run unit test suite
+        run: python -m unittest discover -s tests -q
+
+      - name: Doctor
+        run: tier doctor .
+
+      - name: Lint TIER documents
+        run: |
+          tier lint SPEC.tier
+          tier lint repo.tier
+          tier lint examples/payments-runbook.tier
+          tier lint examples/handbook.tier
+
+  # Build once, publish exactly the artifact that was built. The dist/ directory
+  # is passed between jobs; nothing is rebuilt after the gate passes.
+  build:
+    name: Build sdist and wheel
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: python -m pip install build twine
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Check distribution metadata
+        run: twine check dist/*
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # Trusted Publishing. `id-token: write` is set here, on the publishing job,
+  # rather than workflow-wide, so no other job can mint an OIDC token. This job
+  # must run on a GNU/Linux runner with no `container:` - the action is
+  # Docker-based and needs the host Docker socket.
+  publish:
+    name: Publish to PyPI
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tier-ctx
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

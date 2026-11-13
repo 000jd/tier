@@ -23,14 +23,39 @@ Resolution order for a directory:
 
 1. An explicit `.tier` path, when you passed one. It always wins.
 2. `<root>/repo.tier`, when it exists. A checked-in map keeps its own freshness meaningful.
-3. `<root>/.git/info/tier/repo.tier`, when `<root>/.git` is a directory and that path is writable.
-   Git ignores everything under `.git/info`, so the cache never appears in `git status`.
+3. `<gitdir>/info/tier/repo.tier`, when the repository's git directory is writable. For an ordinary
+   checkout that is `<root>/.git/info/tier/repo.tier`. Git ignores everything under a git directory,
+   so the cache never appears in `git status`.
 4. `<cache-root>/<sha256(realpath(root))[:12]>/repo.tier`, outside the worktree entirely.
    `<cache-root>` is `$TIER_CACHE_DIR`, else the platform cache directory
    (`%LOCALAPPDATA%\tier\cache` on Windows, `$XDG_CACHE_HOME/tier`, or `~/.cache/tier`).
 
 When a map lives outside the repository it describes, a `.owner` file beside it records the work
 root, so `slice` and `impact` still read source files from the right place. All writes are atomic.
+
+### The `git worktree` case
+
+In a `git worktree` or a submodule, `.git` is a file instead of a directory. It holds one line,
+`gitdir: <path>`, and a relative target resolves against the directory containing `.git`. TIER reads
+that pointer before choosing a cache location, so such a checkout lands on tier 3 instead of falling
+through to the user cache:
+
+```sh
+# ordinary checkout
+<root>/.git/info/tier/repo.tier
+
+# linked worktree: .git is a pointer to <main>/.git/worktrees/<name>
+<main>/.git/worktrees/<name>/info/tier/repo.tier
+
+# submodule: .git is a pointer to <super>/.git/modules/<name>
+<super>/.git/modules/<name>/info/tier/repo.tier
+```
+
+Each checkout keeps its own map rather than sharing the main repository's. Worktrees exist to hold
+different branches, so one shared map would be rebuilt on every checkout switch and could serve the
+wrong branch's symbols. Where a git directory carries a `commondir` file, that is resolved first.
+Every one of these locations sits inside a git directory, so `git status` stays clean in the main
+tree and in each worktree. A read-only git directory falls through to tier 4.
 
 ## tier context
 
@@ -39,7 +64,8 @@ query with the hybrid retriever, matches symbol names, packs section bodies and 
 token budget, and appends a compact dependency summary.
 
 ```text
-tier context [TARGET] QUERY... [--budget-tokens N] [--root DIR] [--no-impact] [--no-dedup]
+tier context [TARGET] QUERY... [--budget-tokens N] [--root DIR] [--include-calls MODE]
+             [--no-impact] [--no-dedup]
 ```
 
 | Flag | Default | Meaning |
@@ -48,8 +74,14 @@ tier context [TARGET] QUERY... [--budget-tokens N] [--root DIR] [--no-impact] [-
 | `QUERY` | required | One or more words, joined with spaces into a single query |
 | `--budget-tokens N` | `3000` | Upper bound on the returned text, in tokens |
 | `--root DIR` | target root | Repository root used to resolve source files for slices and impact |
+| `--include-calls MODE` | `auto` | `\|calls` detail: `auto` keeps only edges leaving the matched symbols, `all` keeps every stored edge, `none` omits the table |
 | `--no-impact` | off | Omit the dependency summary |
 | `--no-dedup` | off | Disable session dedup for this call |
+
+The `|calls` table stored in a repository map always holds every caller/callee edge.
+`--include-calls` only affects what `tier context` renders: the default `auto` narrows each
+table to edges whose caller is one of the matched symbols, which keeps a packed body small.
+`tier impact` always reads the complete table.
 
 `TARGET` is the first positional and `QUERY` takes everything after it, so pass the target
 explicitly when the query has more than one word:
@@ -78,6 +110,11 @@ The response is plain text in four parts, in this order:
 
 Anything that does not fit is named on a final `Omitted for budget: @id, @id#symbol` line. A plain
 `.tier` document produces sections only; it has no symbol table and no dependency graph.
+
+Call tables inside the packed section bodies are narrowed to the matched symbols and their
+immediate 1-hop callers and callees. The stored map keeps every edge and `tier impact` always reads
+the full table; the narrowing only affects what `tier context` renders. See
+[spec.md](spec.md#call-graph) for the row grammar and the render modes.
 
 ## tier install
 
@@ -281,8 +318,8 @@ tier slice [MAP] MODULE SYMBOL... [--root DIR] [--context N] [--force]
 Both forms are accepted:
 
 ```sh
-tier slice repo.tier src/tier/repo.py slice_symbols   # explicit map first
-tier slice src/tier/repo.py slice_symbols             # map defaults to the cache
+tier slice repo.tier src/tier/repo.py slice_symbols   # slice MAP MODULE SYM...
+tier slice src/tier/repo.py slice_symbols             # slice MODULE SYM...
 ```
 
 The first token is treated as the map only when it ends in `.tier` or names an existing directory.
@@ -311,7 +348,7 @@ cache:
 ```sh
 tier impact src/tier/repo.py
 tier impact repo.tier src/tier/repo.py --git
-tier impact repo.tier parse --git
+tier impact repo.tier "src/tier/repo.py#slice_symbols"
 ```
 
 A target may be a section id, a repository-relative file path, a unique symbol name, or
@@ -319,8 +356,24 @@ A target may be a section id, a repository-relative file path, a unique symbol n
 and removed symbols per file, and the downstream modules to re-test. Without `--git` the report is
 graph-only. An unresolvable target exits with `1`.
 
-The report prints `Impact target`, direct and transitive dependents, dependencies, transitive
-dependencies, and — for symbol targets — callers and calls.
+The report prints `Impact target`, direct and transitive dependents, dependencies, and transitive
+dependencies. A `module#symbol` target, or a bare symbol name that resolves to exactly one module,
+adds two lines that read the stored `|calls` table:
+
+```text
+Symbol: src/tier/repo.py#slice_symbols
+Symbol callers: src/tier/cli.py#main [65-464], src/tier/context.py#build_context [134-247], src/tier/mcp/server.py#call [354-478]
+Symbol calls: src/tier/models.py#_read_text, src/tier/parser.py#_repo_file_meta, src/tier/repo.py#_resolve_module, src/tier/repo.py#_slice_range, src/tier/repo.py#_symbol_rows
+```
+
+`Symbol callers:` names every recorded function that calls the target, and `Symbol calls:` names
+every symbol the target calls. Each caller carries its own `[Lstart-Lend]` range, so a line number
+in the report can be sliced directly without first reading the module. The package qualifier before
+`#` is the defining module's repository-relative path, not a section id.
+
+`tier impact` reads the parsed map, so it reports every edge in the table. It is never narrowed by
+the 1-hop call filtering that `tier context` applies to rendered bodies; see
+[spec.md](spec.md#call-graph).
 
 ### tier sync
 
@@ -466,7 +519,7 @@ tier from-repo . -o repo.tier
 Compresses a stream read from stdin into TIER, optionally within a token budget.
 
 ```text
-tier pipe [--format {auto,json,md,log}] [--max-tokens N] [-o OUT]
+tier pipe [--format {auto,json,md,log}] [--max-tokens N] [-o OUT | --out OUT]
 ```
 
 The format is auto-detected by default: valid JSON is treated as JSON, Markdown headings or fences
@@ -551,9 +604,14 @@ tier remember memory.tier --section state --key last_release 2026-02-27
 
 | Code | Meaning |
 |---|---|
-| `0` | Success |
-| `1` | Runtime error or failed check (missing file, unknown id, lint error, `doctor` failure) |
-| `2` | Usage error: unknown flag, missing argument, or conflicting `remember` modes |
+| `0` | Success, including a lint run whose only findings are warnings |
+| `1` | Runtime error or failed check (missing file, unknown id, escaped path, lint error, unresolvable impact target, `doctor` failure) |
+| `2` | Usage error: unknown command, unknown flag, missing argument, or conflicting `remember` modes |
+
+`tier hook` is the exception to this table: it always exits `0`, because a nonzero exit from a
+`PostToolUse` hook can break an agent session. Malformed input and internal errors are reported in
+the JSON response instead. `tier lint` exits `1` only when at least one `error:` line is present;
+warnings never fail a lint.
 
 ## Environment
 
@@ -565,6 +623,12 @@ tier remember memory.tier --section state --key last_release 2026-02-27
 | `TIER_TOKEN_FAST` | Forces estimator-only counting process-wide, as for `fast=True` |
 | `TIER_AUTO_SYNC_TTL` | Seconds the MCP server trusts a loaded map before re-checking (`1.5`) |
 
+`TIER_CACHE_DIR` also moves the digest directory used at resolution tier 4. Setting it keeps caches
+out of a home directory for a sandboxed or CI run, and it is the variable to isolate in tests.
+
 `TIER_COUNT_JS`, `TIER_NO_NODE`, and `TIER_TOKEN_FAST` govern token counting: they change reported
 costs, never document content. The active backend is `o200k` or `estimate`, and `tier stats` prints
 it on its first line.
+
+`TIER_AUTO_SYNC_TTL` applies only to the MCP server. The CLI builds or syncs once per invocation and
+exits, so there is no window to tune.

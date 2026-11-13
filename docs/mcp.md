@@ -22,6 +22,63 @@ argument with `realpath` and reject anything that does not stay inside the root 
 root`), is not a `.tier` file where one is required, or does not exist. `tier_ingest` and
 `tier_remember` write only to paths ending in `.tier` under that root.
 
+## Path arguments
+
+A `path` parameter is interpreted the same way in every tool that accepts one:
+
+- **Omitted** — the server root is used.
+- **A directory** — resolves through the repository cache: the map is built on first use and
+  incrementally synced on every later use.
+- **A `.tier` file** — used exactly as given, then synced if it is a repository map.
+
+`tier_repo` is the one exception: it requires a directory, because indexing a map file is not
+meaningful. `tier_get`, `tier_sync`, and `tier_lint` require a `.tier` file; a directory is rejected
+with `no such .tier doc: <path>`. `tier_list` takes no path at all and always walks the root.
+
+Resolution order for a directory:
+
+1. An explicit `.tier` path, when the caller passed one.
+2. `<root>/repo.tier` when it exists — a tracked map always wins, which keeps a checked-in map and
+   any CI freshness gate meaningful.
+3. `<gitdir>/info/tier/repo.tier` when the repository's git directory is writable. For an ordinary
+   checkout that is `<root>/.git/info/tier/repo.tier`. Git ignores everything under a git directory,
+   so the cache is untracked by construction: no `.gitignore` entry is needed and `git status` stays
+   clean.
+4. `<cache-root>/<sha256(realpath(root))[:12]>/repo.tier` otherwise, outside the worktree.
+   `<cache-root>` is `$TIER_CACHE_DIR`, else the platform cache dir —
+   `%LOCALAPPDATA%\tier\cache` on Windows, `$XDG_CACHE_HOME/tier`, or `~/.cache/tier`.
+
+### Worktrees and submodules
+
+In a `git worktree` or a submodule, `.git` is a file, not a directory. It holds a single line,
+`gitdir: <path>`; a relative target resolves against the directory containing `.git`, as Git does.
+The server reads that pointer before choosing a cache location, so such a checkout does not silently
+fall through to the user cache.
+
+| Checkout | Git directory | Map location |
+|---|---|---|
+| ordinary clone | `<root>/.git` | `<root>/.git/info/tier/repo.tier` |
+| linked worktree | `<main>/.git/worktrees/<name>` | `<gitdir>/info/tier/repo.tier` |
+| submodule | `<super>/.git/modules/<name>` | `<gitdir>/info/tier/repo.tier` |
+| read-only git directory | not writable | `<cache-root>/<digest>/repo.tier` |
+
+A per-checkout admin directory is used as given rather than collapsed onto the main repository's
+`.git`: worktrees exist to hold different branches, so one shared map would be rebuilt on every
+checkout switch and could serve the wrong branch's symbols. Where a git directory carries a
+`commondir` file, that is resolved first, so the metadata directory it names is the one used. Each
+checkout gets its own map, and every one of those locations is inside a git directory that Git
+ignores.
+
+When the map lives outside its repository, a `.owner` file is written beside it recording the work
+root, because neither `<gitdir>/info/tier/` nor a digest directory contains the sources. That
+manifest is how a later resolve recovers the checkout. `tier_list` skips these directories — it
+prunes `.git` and anything `is_cache_dir` recognises, so cached maps never appear in the listing.
+
+Reads are cheap after the first one. A repository map loaded from a `.tier` file is re-checked for
+changes at most once per `TIER_AUTO_SYNC_TTL` seconds (default `1.5`), using recorded file and
+directory `mtime` + `size` values as a change detector; the sync itself only re-parses files whose
+fingerprint moved.
+
 The wire protocol is one JSON object per line on stdin, one response per line on stdout. The
 server answers `initialize` (negotiating `2025-06-18`, `2025-03-26`, or `2024-11-05`, defaulting to
 `2025-06-18`), `tools/list`, `tools/call`, and `ping`; notifications such as
@@ -110,12 +167,12 @@ Dependencies: @src-tier-models.py, @src-tier-parser.py
 
 Parameters:
 
-| Parameter | Type | Default | Meaning |
-|---|---|---|---|
-| `query` | string | — | Natural-language question or symbol names; required |
-| `path` | string | `"."` | `.tier` file or directory; omitted means the server root's map |
-| `budget_tokens` | integer | `3000` | Maximum tokens of returned context, notes included |
-| `include_impact` | boolean | `true` | Include the dependency summary for repository maps |
+| Parameter | Type | Default | Required | Meaning |
+|---|---|---|---|---|
+| `query` | string | — | yes | Natural-language question or symbol names |
+| `path` | string | — | no | `.tier` file or directory; omitted means the server root's map |
+| `budget_tokens` | integer | `3000` | no | Maximum tokens of context to return |
+| `include_impact` | boolean | `true` | no | Include a compact dependency/impact summary for repo maps |
 
 `budget_tokens` is clamped to at least 1 and is enforced against the running token total of the
 assembled text — header, sections, slices, impact, and omission note. A part that would push the
@@ -123,6 +180,9 @@ total over is skipped and named in the omission line instead. `include_impact` h
 plain `.tier` document, which has neither a symbol table nor a dependency graph, and no effect when
 routing found no sections. A blank `query` is a `ValueError`, reported in-band as
 `error: query is required`; when no query term matches anything, the response is the header alone.
+
+Call tables inside the packed bodies are narrowed to the matched symbols and their immediate 1-hop
+callers and callees. The stored map keeps every edge, and `tier impact` always reads the full table.
 
 Because the server holds one `Session` for the life of the process, a repeated `tier_context` call
 with the same query returns stubs instead of re-sending the same bodies, which is why it is safe to
@@ -157,48 +217,49 @@ outside the root are skipped. Returns `(no .tier docs found)` when the walk is e
 
 ### tier_index
 
-| Parameter | Type | Default |
-|---|---|---|
-| `path` | string | — (required) |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `path` | string | — | yes |
 
 Accepts a `.tier` file or a directory. Returns the L0 index: title and summary, global rules, and
 one line per section carrying `@id`, `~Nt`, `!R`, and the abstract.
 
 ### tier_find
 
-| Parameter | Type | Default |
-|---|---|---|
-| `path` | string | — (required) |
-| `query` | string | — (required) |
-| `k` | integer | `3` |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `path` | string | — | yes |
+| `query` | string | — | yes |
+| `k` | integer | `3` | no |
 
 Accepts a directory. Returns `@id score abstract` lines, or `no matches`.
 
 ### tier_get
 
-| Parameter | Type | Default |
-|---|---|---|
-| `path` | string | — (required, must end in `.tier`) |
-| `ids` | array of string | — (required) |
-| `follow` | boolean | `false` |
-| `table_format` | `raw` \| `aligned` \| `anchored` | `raw` |
-| `force` | boolean | `false` |
-| `reset` | boolean | `false` |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `path` | string | — | yes, must end in `.tier` |
+| `ids` | array of string | — | yes |
+| `follow` | boolean | `false` | no |
+| `table_format` | `raw` \| `aligned` \| `anchored` | `raw` | no |
+| `force` | boolean | `false` | no |
+| `reset` | boolean | `false` | no |
 
 Requires a `.tier` file; a directory is rejected with `no such .tier doc: <path>`. `follow` adds one
 hop of `>` references. `table_format` changes rendering only, never the stored bytes. `reset` clears
 the session cache for this path before fetching; `force` re-sends bodies that are already cached.
-Unknown ids are returned with the list of available ids appended to the same text.
+Unknown ids are returned with the list of available ids appended to the same text. A `|calls` table
+in a fetched body is rendered whole here; narrowing applies to `tier_context` only.
 
 ### tier_slice
 
-| Parameter | Type | Default |
-|---|---|---|
-| `path` | string | — (required) |
-| `module` | string | — (required) |
-| `symbols` | array of string | — (required) |
-| `context_lines` | integer | `0` |
-| `force` | boolean | `false` |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `path` | string | — | yes |
+| `module` | string | — | yes |
+| `symbols` | array of string | — | yes |
+| `context_lines` | integer | `0` | no |
+| `force` | boolean | `false` | no |
 
 Accepts a directory or an explicit `.tier` path. `module` may be a section id or a
 repository-relative file path. `symbols` holds symbol names, matched case-insensitively after a
@@ -207,18 +268,18 @@ leading `@` is stripped; an empty array slices every symbol in the module. Each 
 
 Source lines are read relative to the directory that holds the resolved map, not relative to the
 root. That works when the map is a tracked `<root>/repo.tier`, which sits beside its sources. When a
-directory argument resolves to a cache under `.git/info/tier/` or the platform cache directory, the
+directory argument resolves to a cache under a git directory or the platform cache directory, the
 sources are not beside the map and slices report `unknown symbol/file: file:<path>`. Pass an
 explicit `<root>/repo.tier`, or use the CLI `tier slice`, which threads the owning work root through
 explicitly.
 
 ### tier_impact
 
-| Parameter | Type | Default |
-|---|---|---|
-| `path` | string | — (required) |
-| `target` | string | — (required) |
-| `git` | boolean | `false` |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `path` | string | — | yes |
+| `target` | string | — | yes |
+| `git` | boolean | `false` | no |
 
 Accepts a directory or an explicit `.tier` path. `target` may be a section id, a relative file
 path, a unique symbol name, or `module#symbol`. `git` adds the working-tree blast radius: changed
@@ -227,12 +288,16 @@ This is the only reader that skips the file-level auto-sync, so a `.tier` argume
 against the map exactly as it sits on disk; a directory argument still resolves through the cache
 and is built on first use.
 
+For a `module#symbol` or bare-symbol target the report adds `Symbol callers:` and `Symbol calls:`,
+naming the exact calling functions with their line ranges. It reads every row of the stored `|calls`
+table, so it is never narrowed the way `tier_context` narrows its rendered bodies.
+
 ### tier_sync
 
-| Parameter | Type | Default |
-|---|---|---|
-| `path` | string | — (required, must end in `.tier`) |
-| `rehash` | boolean | `false` |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `path` | string | — | yes, must end in `.tier` |
+| `rehash` | boolean | `false` | no |
 
 Requires a map file. Re-parses only changed and added files, removes deleted modules, rewrites the
 map atomically, and invalidates the affected sections and their slices in the session cache.
@@ -241,21 +306,21 @@ line: `sync <path>: N changed, N added, N deleted, N unchanged (written|no chang
 
 ### tier_lint
 
-| Parameter | Type | Default |
-|---|---|---|
-| `path` | string | — (required, must end in `.tier`) |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `path` | string | — | yes, must end in `.tier` |
 
 Returns `level: message` lines, or `ok` when the document is clean.
 
 ### tier_ingest
 
-| Parameter | Type | Default |
-|---|---|---|
-| `content` | string | — (required) |
-| `format` | `auto` \| `md` \| `json` \| `log` | `auto` |
-| `index_only` | boolean | `false` |
-| `max_tokens` | integer | unset |
-| `save_as` | string | unset |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `content` | string | — | yes |
+| `format` | `auto` \| `md` \| `json` \| `log` | `auto` | no |
+| `index_only` | boolean | `false` | no |
+| `max_tokens` | integer | unset | no |
+| `save_as` | string | unset | no |
 
 `auto` sniffs the payload: valid JSON is JSON, Markdown headings or fences are Markdown, anything
 else is log output. Without `max_tokens` the full TIER document (or its L0 index when `index_only`)
@@ -266,10 +331,10 @@ rules. `save_as` must end in `.tier` and stay under the root.
 
 ### tier_repo
 
-| Parameter | Type | Default |
-|---|---|---|
-| `path` | string | `"."` |
-| `index_only` | boolean | `false` |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `path` | string | `"."` | no |
+| `index_only` | boolean | `false` | no |
 
 `path` may be omitted, and it is the only tool that requires a directory rather than accepting
 either form. Returns the full repository map, or just its L0 section when `index_only` is set. The
@@ -278,19 +343,19 @@ when you want the result reused on the next call.
 
 ### tier_remember
 
-| Parameter | Type | Default |
-|---|---|---|
-| `path` | string | — (required, must end in `.tier`) |
-| `action` | `rule` \| `section` \| `append-rule` \| `append-kv` \| `append-ref` | — (required) |
-| `section` | string | `""` |
-| `title` | string | `""` |
-| `abstract` | string | `""` |
-| `body` | array of string | unset |
-| `text` | string | `""` |
-| `key` | string | `""` |
-| `value` | string | `""` |
-| `target` | string | `""` |
-| `note` | string | `""` |
+| Parameter | Type | Default | Required |
+|---|---|---|---|
+| `path` | string | — | yes, must end in `.tier` |
+| `action` | `rule` \| `section` \| `append-rule` \| `append-kv` \| `append-ref` | — | yes |
+| `section` | string | `""` | no |
+| `title` | string | `""` | no |
+| `abstract` | string | `""` | no |
+| `body` | array of string | unset | no |
+| `text` | string | `""` | no |
+| `key` | string | `""` | no |
+| `value` | string | `""` | no |
+| `target` | string | `""` | no |
+| `note` | string | `""` | no |
 
 `rule` appends a global rule (`text`); `section` upserts (`title`, `abstract`, `body`);
 `append-rule` appends an imperative rule (`text`) to `section`; `append-kv` upserts a `= key value`
@@ -302,27 +367,239 @@ reported in-band. The written section is then invalidated in the session cache.
 ## Repository cache
 
 The map for a directory is a derived artifact, so the server never asks you to place one. It
-resolves a location, builds the map on first use, and syncs it incrementally afterwards.
+resolves a location — see [Path arguments](#path-arguments) for the order and the worktree case —
+builds the map on first use, and syncs it incrementally afterwards. Nothing is cached for an
+explicit `.tier` path that the caller passed and that already exists.
 
-1. An explicit `.tier` path, when the caller passed one.
-2. `<root>/repo.tier` when it exists — a tracked map always wins, which keeps a checked-in map and
-   any CI freshness gate meaningful.
-3. `<root>/.git/info/tier/repo.tier` when `<root>/.git` is a directory and that location is
-   writable. Git ignores everything under `.git/info`, so the cache is untracked by construction:
-   no `.gitignore` entry is needed and `git status` stays clean.
-4. `<cache-root>/<sha256(realpath(root))[:12]>/repo.tier` otherwise, outside the worktree.
-   `<cache-root>` is `$TIER_CACHE_DIR`, else the platform cache dir —
-   `%LOCALAPPDATA%\tier\cache` on Windows, `$XDG_CACHE_HOME/tier`, or `~/.cache/tier`.
-
-When the map lives outside its repository, a `.owner` file is written beside it recording the work
-root, because neither `.git/info/tier/` nor a digest directory contains the sources. `tier_list`
-skips these directories — it prunes `.git` and anything `is_cache_dir` recognises, so cached maps
-never appear in the listing.
+A map under a git directory or a digest directory is not beside the sources, so a `.owner` file is
+written next to it recording the work root. `tier_list` prunes `.git` and anything `is_cache_dir`
+recognises, so cached maps never appear in the listing. A build is atomic: the map is written to a
+temporary file and renamed into place, so an interrupted build cannot leave a half-written map.
 
 Reads are cheap after the first one. A repository map loaded from a `.tier` file is re-checked for
 changes at most once per `TIER_AUTO_SYNC_TTL` seconds (default `1.5`), using recorded file and
 directory `mtime` + `size` values as a change detector; the sync itself only re-parses files whose
-fingerprint moved.
+fingerprint moved. Set `TIER_AUTO_SYNC_TTL=0` to re-check on every call.
+
+## Client configuration
+
+Every client below receives the same stdio server and the same root argument. `tier install` writes
+these entries for you; the snippets are the equivalent hand edits. Two launch forms exist and both
+work in every client:
+
+- `tier-mcp ROOT` — the console script, when `tier-ctx` is installed (`pip install tier-ctx`,
+  `uv tool install tier-ctx`, `pipx install tier-ctx`).
+- `uvx --from tier-ctx tier-mcp ROOT` — runs the published package without installing it. Use this
+  where you want no global install, at the cost of a per-launch resolve.
+
+The installer prefers an absolute `tier-mcp` path and otherwise records the absolute current
+interpreter with `-m tier.mcp`, so a GUI host does not depend on a shell `PATH`. The snippets below
+show the plain `tier-mcp` form for readability; substitute the absolute path that
+`tier config-snippet` prints when the host does not inherit your shell environment.
+
+Schema shapes, as the installer writes them:
+
+| Client | Config path | Container key | Entry shape |
+|---|---|---|---|
+| Claude Code | `.mcp.json` (project), `~/.claude.json` (user) | `mcpServers` | `{"command": ..., "args": [...]}` |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `~/.config/Claude/claude_desktop_config.json` (Linux), `%APPDATA%\Claude\claude_desktop_config.json` (Windows) | `mcpServers` | `{"command": ..., "args": [...]}` |
+| Cursor | `.cursor/mcp.json` (project), `~/.cursor/mcp.json` (global) | `mcpServers` | `{"command": ..., "args": [...]}` |
+| VS Code | `.vscode/mcp.json` | `servers` | `{"type": "stdio", "command": ..., "args": [...]}` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` | `{"command": ..., "args": [...]}` |
+| OpenCode | `opencode.json` (project), `~/.config/opencode/opencode.json` (global) | `mcp` | `{"type": "local", "command": [cmd, ...args], "enabled": true}` |
+| Command Code | `.commandcode/mcp.json` (project), `~/.commandcode/mcp.json` (user) | `mcpServers` | `{"command": ..., "args": [...]}` |
+
+### Claude Code
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "tier-mcp",
+      "args": ["/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+With `uvx`:
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "uvx",
+      "args": ["--from", "tier-ctx", "tier-mcp", "/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "tier-mcp",
+      "args": ["/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+With `uvx`:
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "uvx",
+      "args": ["--from", "tier-ctx", "tier-mcp", "/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+### Cursor
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "tier-mcp",
+      "args": ["/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+With `uvx`:
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "uvx",
+      "args": ["--from", "tier-ctx", "tier-mcp", "/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+### VS Code
+
+The `servers` container carries a `type` field, and it must be present for VS Code to start the
+process:
+
+```json
+{
+  "servers": {
+    "tier": {
+      "type": "stdio",
+      "command": "tier-mcp",
+      "args": ["/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+With `uvx`:
+
+```json
+{
+  "servers": {
+    "tier": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "tier-ctx", "tier-mcp", "/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+### Windsurf
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "tier-mcp",
+      "args": ["/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+With `uvx`:
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "uvx",
+      "args": ["--from", "tier-ctx", "tier-mcp", "/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+### OpenCode
+
+OpenCode uses the `mcp` container, `type: "local"`, a single `command` array that concatenates the
+program and its arguments, and an `enabled` flag. There is no separate `args` key.
+
+```json
+{
+  "mcp": {
+    "tier": {
+      "type": "local",
+      "command": ["tier-mcp", "/absolute/path/to/project"],
+      "enabled": true
+    }
+  }
+}
+```
+
+With `uvx`:
+
+```json
+{
+  "mcp": {
+    "tier": {
+      "type": "local",
+      "command": ["uvx", "--from", "tier-ctx", "tier-mcp", "/absolute/path/to/project"],
+      "enabled": true
+    }
+  }
+}
+```
+
+### Command Code
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "tier-mcp",
+      "args": ["/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+With `uvx`:
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "uvx",
+      "args": ["--from", "tier-ctx", "tier-mcp", "/absolute/path/to/project"]
+    }
+  }
+}
+```
 
 ## Session deduplication
 

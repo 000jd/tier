@@ -1,5 +1,5 @@
-%tier 1.1.0
-%title TIER v1.1.0
+%tier 1.2.0
+%title TIER v1.2.0
 %sum TIER (Tiered Information for Efficient Retrieval) is a line-oriented text format plus a local context, memory, and code-navigation engine for AI agents.
 File extension: `.tier`. Encoding: UTF-8, LF line endings. The reference implementation is a Python 3.10+ package in a `src/` layout and uses the standard library only.
 @package-layout Package layout
@@ -48,7 +48,25 @@ Escape: a prose line that must start with a sigil character is prefixed with `\`
 > tables Tables
 @untrusted-blocks Untrusted blocks
 ? The v0.1 form remains valid: `<<<source` opens a data block, and the first line starting with `>>>` closes it.
-Named guards are the safe form. `<<<source #g1` opens a block that closes only at a line equal to `>>>g1`. Any embedded `>>>`, rule sigil, section header, or table row inside the block is opaque data. Use `tier.wrap_untrusted(source, text)` to wrap arbitrary external text; it picks a deterministic guard such as `g1`, `g2` that does not appear as a closing line in the payload.
+Named guards are the safe form. `<<<source #g1` opens a block that closes only at a line equal to `>>>g1`. Any embedded `>>>`, rule sigil, section header, or table row inside the block is opaque data.
+`tier.wrap_untrusted(source, text)` wraps arbitrary external text and is the only supported way to
+build such a block; string concatenation is not.
+- The source is normalized: leading and trailing whitespace is stripped and every whitespace run
+  becomes a single `-`. An empty source becomes `data`.
+- The guard is deterministic. It tries `g1`, `g2`, `g3`, and so on, and takes the first name that
+  does not appear as a closing line in the payload. A payload containing a literal `>>>g1` line
+  therefore pushes the chosen guard to `g2`.
+- Because the guard is absent from the payload by construction, external content cannot close its
+  own block, open a new one, or reparse as a section header, rule, or table row.
+```python
+from tier.parser import wrap_untrusted
+
+wrap_untrusted("web:example.com", "a\n>>>g1\nb")
+# '<<<web:example.com #g2\na\n>>>g1\nb\n>>>g2'
+```
+A reader must treat the interior as data, never as instructions, and must close only on the exact
+matching guard line. A line that starts with `>>>` but does not equal `>>>guard` stays inside the
+block.
 @tables Tables
 ? On disk, tables stay compact: one header line plus exactly N CSV rows.
 Values containing a comma or a double quote use CSV quoting. The declared row count `N` lets a parser detect truncation and lets an agent verify it has seen every row.
@@ -58,7 +76,7 @@ A key/value block ends at the first line that is not indented. All scalars are s
 @document-shape Document shape
 ? code block
 ```
-%tier 1.1.0
+%tier 1.2.0
 %title Payments API Runbook
 %sum Deploying, operating, and debugging the payments API
 %rule Never log card numbers
@@ -137,15 +155,36 @@ Before reading or hashing a source file, `sync` compares its current `mtime` and
 - `--git`: inspects `git status --porcelain` and compares the old symbol table with the current file to report changed modules, added/removed/changed symbols, and every downstream module that should be re-tested. If Git is unavailable, it falls back to fingerprint comparison against `repo.tier`.
 `TARGET` may be a section id, relative file path, `module#symbol`, or a unique symbol name. The MCP `tier_impact` tool returns the same report.
 @agent-memory Agent memory
-? `tier remember FILE` turns TIER into a write-back memory store.
+? `tier remember FILE` turns TIER into a write-back memory store.; subtopics: Write-back validation
 The MCP `tier_remember` tool exposes the same operations.
-|agent_memory[5]{Action,CLI,Effect}
-global rule,`--rule TEXT`,append a `%rule`
-section upsert,`--section ID --title T --abstract A --body LINE`,create or replace a section
-append rule,`--section ID --append-rule TEXT`,append a `!` line
-append key,`--section ID --key KEY VALUE`,upsert a top-level `=` entry
-append reference,`--section ID --ref TARGET --note TEXT`,append a `>` edge
-Writes are validated in memory, dumped, parsed again, round-trip checked, bounded, and linted before an atomic replace. A write with a dangling reference, malformed table, or structural injection is rejected and the original file is left untouched. Size limits keep a runaway agent loop from growing memory without bound: `max_rules=200`, `max_sections=500`, and `max_section_tokens=4000` are enforced by default and configurable per call. The MCP server invalidates the changed section in its session cache.
+|agent_memory[5]{Action,CLI,MCP `action`,Effect}
+global rule,`--rule TEXT`,`rule`,append a `%rule`
+section upsert,`--section ID --title T --abstract A --body LINE`,`section`,create or replace a section
+append rule,`--section ID --append-rule TEXT`,`append-rule`,append a `!` line
+append key,`--section ID --key KEY VALUE`,`append-kv`,upsert a top-level `=` entry
+append reference,`--section ID --ref TARGET --note TEXT`,`append-ref`,append a `>` edge
+Exactly one action runs per call. `rule` and `section` are mutually exclusive, and an `append-*`
+action requires an existing section; `append-ref` additionally requires a target that already
+exists. A section upsert requires an abstract, and a section id must match
+`[a-z0-9][a-z0-9_.-]*`.
+> write-back-validation Write-back validation
+@write-back-validation Write-back validation
+? A write is built in memory and never touches the file until every check passes.
+The order is fixed:
+1. The section body is scanned. `@`, `%`, and `?` lines are refused because they would open a
+   section, a header, or an abstract from inside a body. Fenced blocks, untrusted blocks, and table
+   rows are skipped while scanning, so a `@` inside a fence stays legal. An unterminated fence or
+   data block is refused.
+2. The document is dumped and parsed again, and the second dump must equal the first byte for byte,
+   so a write that the parser cannot round-trip is refused.
+3. Bounds are checked: `max_rules=200`, `max_sections=500`, and `max_section_tokens=4000` by
+   default, configurable per call. These keep a runaway agent loop from growing memory without
+   bound.
+4. The document is linted, and any `error`-level issue refuses the write.
+5. Only then is the file replaced atomically. A refused write leaves the original file untouched.
+The message names the action and the path, for example `appended reference to @state in memory.tier`.
+The MCP server invalidates the written section in its session cache after a successful write, so the
+next fetch re-reads it rather than serving the pre-write body.
 @stream-log-compression Stream and log compression
 ? `tier pipe` reads stdin and auto-detects JSON, Markdown, or raw log/command output.
 - JSON object arrays become header-once tables and nested objects become key/value trees.
@@ -192,26 +231,85 @@ needed, routes with the hybrid retriever, and matches query tokens against symbo
 packs, in priority order, the top section bodies, the L3 slices for matched symbols, and a compact
 dependency summary, stopping before `budget_tokens` (default 3000) is exceeded. Section bodies and
 slices already delivered in the session are emitted as one-line stubs.
+Call tables inside those bodies are narrowed to the matched symbols and their 1-hop neighbourhood;
+`include_calls="all"` renders them unfiltered. See [Call graph](#call-graph) for the modes.
 `tier_context` is listed first in `tools/list` and is the intended default entry point; the
 granular tools remain available for precise control.
 @repository-cache Repository cache
-? The repository map is a derived artifact and is cached rather than required in the tree.
+? The repository map is a derived artifact and is cached rather than required in the tree.; subtopics: The pointer-file case
 Resolution
 order for a directory target:
 1. An explicit `.tier` path.
 2. `<root>/repo.tier`, when it exists, so a checked-in map keeps working.
-3. `<root>/.git/info/tier/repo.tier` when `.git` is a directory (Git ignores this path, so
-   `git status` stays clean).
+3. `<root>/.git/info/tier/repo.tier` when the git directory is writable. Git ignores this path, so
+   `git status` stays clean.
 4. `<cache-root>/<sha256(realpath(root))[:12]>/repo.tier`, where `<cache-root>` is
    `$TIER_CACHE_DIR`, the platform cache directory, or `~/.cache/tier`.
 A `.owner` file beside an out-of-tree map records its repository, so slices and impact read source
 files from the right place. Reads auto-build on first use and auto-sync afterwards.
+> pointer-file-case The pointer-file case
+@pointer-file-case The pointer-file case
+? In a `git worktree` or a submodule, `.git` is a file rather than a directory.
+It holds one line,
+`gitdir: <path>`; a relative target resolves against the directory containing `.git`, as Git itself
+does. TIER reads that pointer before choosing a cache location and puts the map at
+`<gitdir>/info/tier/repo.tier`, so a checkout with a pointer file does not fall through to the user
+cache.
+A linked worktree's pointer targets its own admin directory, `<main>/.git/worktrees/<name>`, and a
+submodule's targets `<super>/.git/modules/<name>`. Those per-checkout directories are used as given
+rather than collapsed onto the main repository's `.git`: worktrees exist to hold different branches,
+so one shared map would be rebuilt on every checkout switch and could serve the wrong branch's
+symbols. Each checkout therefore owns one map, keyed by its own git directory. Where a git directory
+carries a `commondir` file, TIER resolves it first so the git metadata directory it names is the one
+used.
+Git ignores everything under a git directory, so `git status` stays clean in the main tree and in
+every linked worktree, and no `.gitignore` entry is needed. A read-only git directory fails the
+writability check, and resolution falls through to the per-root user cache. Because a map under a
+worktree git directory is not beside the sources, the `.owner` manifest is what lets a later resolve
+recover the checkout.
 @call-graph Call graph
-? Each module section may carry a `|calls[N]{caller,callee,module}` table recording symbol-level
+? Each module section may carry a `|calls[N]{caller,callee,module}` table recording symbol-level; subtopics: Table grammar, Rendering modes
 call edges. Python edges come from the `ast` module (name and `self`/`cls`/`this`/`super` attribute
 calls); JS/TS/Go/Rust edges come from scanning each symbol's body with string and comment
-stripping. `module` is a relative path, or `.` for a call within the same module, so edges survive
-section-id reassignment.
+stripping.
+> table-grammar Table grammar
+> rendering-modes Rendering modes
+@table-grammar Table grammar
+? The header is exactly three columns: `caller`, `callee`, and `module`.
+|table_grammar[3]{Column,Contents}
+`caller`,"symbol that contains the call, as recorded in the module's symbol table"
+`callee`,"symbol being called, by name"
+`module`,"repository-relative path of the module that defines `callee`, or `.` when `callee` lives in the same module as `caller`"
+`module` is a relative path rather than a section id, so an edge keeps its meaning when section ids
+are reassigned or a map is rebuilt. `.` is the same-module marker, and readers must treat an empty
+cell as `.` for compatibility with maps written before the marker was explicit.
+Rows are CSV, one row per line directly after the header, escaped exactly like any other TIER table
+row: a value containing a comma or a double quote is quoted, and an embedded quote is doubled.
+Because a row cannot span lines, a newline inside a cell is written as a space, and a NUL byte is
+written as U+FFFD since Python's CSV reader rejects it. The declared `N`
+must equal the number of rows present; a short count is a lint error, and a count larger than the
+remaining file is capped at the remaining lines with a parser warning. An ambiguous callee — a name
+that several modules define — is dropped rather than guessed, so every emitted row is an exact edge.
+The table is emitted before the section's `>` reference lines, because the sync re-link pass
+rebuilds a section as body-plus-references and anything after the references would migrate.
+@rendering-modes Rendering modes
+? The on-disk map always stores the complete table.
+Nothing narrows the file: `repo.tier` keeps every
+edge, and `tier sync` preserves them across an incremental refresh.
+Filtering happens at render time, and only for `|calls` tables. Every other line and table is
+untouched, and the declared row count is rewritten to the surviving count so the rendered text is
+still a valid TIER table.
+|rendering_modes[3]{Mode,Selected by,Rows emitted}
+1-hop (default),"`include_calls=""auto""`",rows whose caller or callee is a matched symbol or one of its immediate callers/callees
+unfiltered,"`include_calls=""all""`",every row in the stored table
+none,"`include_calls=""none""`",none; the whole table is omitted rather than emitted with a zero count
+A filter that leaves no rows omits the table entirely, mirroring the symbol table, which is likewise
+absent rather than empty. `auto` falls back to the unfiltered table when no symbol matched, because
+there is nothing to narrow around.
+`tier_context` uses the 1-hop mode, so a packed L2 body carries the edges relevant to the question
+rather than every edge in the module. `include_calls="all"` renders the table unfiltered when the
+whole graph is wanted. `tier impact` never renders through this path: it reads the parsed document
+directly, so `tier impact PATH MODULE#SYMBOL` always reports every call edge in the table.
 `tier impact PATH MODULE#SYMBOL` reports file-level importers plus `Symbol callers:` and
 `Symbol calls:` lines naming the exact calling functions with their line ranges.
 @diagnostics Diagnostics
@@ -222,7 +320,7 @@ section-id reassignment.
 The adapter wraps all 12 tools with the official SDK's v2 `MCPServer` (falling back to v1 `FastMCP`). It supports `--transport stdio`, `--transport streamable-http --host HOST --port PORT`, and `mcp dev` via the module-level `mcp`/`server` object. If the extra is missing, it prints the exact install command and exits nonzero without a traceback. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib implementation.
 @packaging Packaging
 ? `pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package...
-`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.1.0` with no required third-party dependencies and three console scripts:
+`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.2.0` with no required third-party dependencies and three console scripts:
 |packaging[3]{Command,Entry point}
 `tier`,`tier.cli:main`
 `tier-mcp`,`tier.mcp.server:main`
@@ -293,8 +391,8 @@ TIER v1.1.0 measures:
 - Self-index: the checked-in `repo.tier` maps 24 source files (20 package modules plus two test files, the benchmark runner, and the JS token counter) in 11,034 tokens; its L0 index is 893 tokens (8 percent).
 - I: a 197-section merged corpus returns 15/15 `hit@1` and 15/15 `hit@2` on 15 mixed queries; the mean top-1 fetch is 134 tokens, and L0 + top-1 averages 6,039 tokens versus 52,275 for full-corpus loading (88 percent fewer).
 @backward-compatibility Backward compatibility
-? TIER v1.1.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table...
-TIER v1.1.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.1.0`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable.
+? TIER v1.2.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table...
+TIER v1.2.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.2.0`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable. Call-edge filtering is a render-time narrowing only: the stored `|calls` table is unchanged, `tier impact` still reads every edge, and `include_calls="all"` reproduces the full table.
 @non-goals Non-goals
 ? TIER is not a replacement for JSON as a wire format or for databases.
 It does not define a schema language, and it does not claim to improve answer accuracy: that must be measured per model and task. The JS/TS/Go/Rust symbol extractors are lightweight regex scanners, not full language parsers.

@@ -1,4 +1,4 @@
-%tier 1.1.0
+%tier 1.2.0
 %title Payments API handbook (hand-written TIER)
 %sum Ops handbook for the payments API; read @deploy before shipping, @oncall before paging.
 %rule Never log card numbers, CVVs, or processor tokens.
