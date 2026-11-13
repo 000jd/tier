@@ -658,5 +658,180 @@ class InstallerSkillTests(unittest.TestCase):
         self.assertIn("tier context", text)
 
 
+class IngestArtifactTests(unittest.TestCase):
+    """Over-budget ingest artifacts must land in the cache and read back."""
+
+    def _call(self, td, **args):
+        from tier.mcp import server as tier_mcp
+
+        old_root, old_state = tier_mcp.ROOT, dict(tier_mcp._SYNC_STATE)
+        tier_mcp.ROOT = os.path.realpath(td)
+        tier_mcp._SYNC_STATE.clear()
+        try:
+            return tier_mcp.call("tier_ingest", args)
+        finally:
+            tier_mcp.ROOT = old_root
+            tier_mcp._SYNC_STATE.clear()
+            tier_mcp._SYNC_STATE.update(old_state)
+
+    def _artifact(self, td, cache_dir):
+        """Ingest over budget and return the artifact path, with TIER_CACHE_DIR still set."""
+        _put(td, "a.py", "def a():\n    return 1\n")
+        old = os.environ.get("TIER_CACHE_DIR")
+        os.environ["TIER_CACHE_DIR"] = cache_dir
+        try:
+            out = self._call(td, content="# H\n\n" + "key: value\n" * 400, max_tokens=50)
+        finally:
+            if old is None:
+                os.environ.pop("TIER_CACHE_DIR", None)
+            else:
+                os.environ["TIER_CACHE_DIR"] = old
+        lines = [l for l in out.splitlines() if l.startswith("Full artifact: ")]
+        self.assertTrue(lines, out)
+        return lines[0].split(": ", 1)[1]
+
+    def _read(self, td, cache_dir, name, args):
+        """Call a read tool with the cache still pointed at `cache_dir`."""
+        from tier.mcp import server as tier_mcp
+
+        old_root = tier_mcp.ROOT
+        old_cache = os.environ.get("TIER_CACHE_DIR")
+        tier_mcp.ROOT = os.path.realpath(td)
+        os.environ["TIER_CACHE_DIR"] = cache_dir
+        try:
+            return tier_mcp.call(name, args)
+        finally:
+            tier_mcp.ROOT = old_root
+            if old_cache is None:
+                os.environ.pop("TIER_CACHE_DIR", None)
+            else:
+                os.environ["TIER_CACHE_DIR"] = old_cache
+
+    def test_over_budget_artifact_lands_in_cache_not_tmp(self):
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as cd:
+            path = self._artifact(td, cd)
+            self.assertTrue(path.endswith(".tier"), path)
+            self.assertIn(os.path.join("ingest", "ingest-"), path,
+                          f"artifact must live in the cache ingest dir: {path}")
+            self.assertFalse(os.path.basename(path).startswith("tier-pipe-"),
+                             f"artifact must not use the old mkstemp name: {path}")
+
+    def test_artifact_round_trips_through_get(self):
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as cd:
+            path = self._artifact(td, cd)
+            body = self._read(td, cd, "tier_get", {"path": path, "ids": ["_"]})
+            self.assertIn("key: value", body)
+
+    def test_artifact_is_findable(self):
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as cd:
+            path = self._artifact(td, cd)
+            found = self._read(td, cd, "tier_find", {"path": path, "query": "key value"})
+            self.assertTrue(found.strip())
+
+    def test_non_cache_path_is_still_rejected(self):
+        """Widening the guard must not turn into an escape hatch."""
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as cd:
+            outside = os.path.join(cd, "outside.tier")
+            with open(outside, "w", encoding="utf-8") as f:
+                f.write("%tier 1.2.0\n@x x\n")
+            from tier.mcp import server as tier_mcp
+
+            old_root = tier_mcp.ROOT
+            tier_mcp.ROOT = os.path.realpath(td)
+            try:
+                with self.assertRaises(ValueError):
+                    tier_mcp.call("tier_get", {"path": outside, "ids": ["x"]})
+            finally:
+                tier_mcp.ROOT = old_root
+
+    def test_artifact_is_content_addressed(self):
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as cd:
+            first = self._artifact(td, cd)
+            second = self._artifact(td, cd)
+            self.assertEqual(first, second, "identical payloads must reuse one artifact")
+            self.assertEqual(len(os.listdir(os.path.dirname(first))), 1)
+
+    def test_prune_ingest_keeps_newest(self):
+        with tempfile.TemporaryDirectory() as td:
+            for i in range(5):
+                path = os.path.join(td, f"ingest-{i}.tier")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("%tier 1.2.0\n")
+                os.utime(path, (1000 + i, 1000 + i))
+            removed = cache.prune_ingest(td, keep=3)
+            self.assertEqual(len(removed), 2)
+            left = sorted(os.listdir(td))
+            self.assertEqual(left, ["ingest-2.tier", "ingest-3.tier", "ingest-4.tier"])
+
+    def test_no_tier_pipe_temp_files_are_created(self):
+        import glob
+
+        pattern = os.path.join(tempfile.gettempdir(), "tier-pipe-*.tier")
+        before = set(glob.glob(pattern))
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as cd:
+            self._artifact(td, cd)
+        self.assertEqual(set(glob.glob(pattern)) - before, set(),
+                         "ingest must not write tier-pipe-* scratch files to /tmp")
+
+
+class RoutingTests(unittest.TestCase):
+    """One-hop call collaborators must be routed, not just rendered."""
+
+    def _repo(self, root):
+        _put(root, "a.py",
+             '"""Alpha."""\n\n\ndef zzz_target(x):\n    return x\n\n\n'
+             'def unrelated(x):\n    return x\n')
+        _put(root, "b.py",
+             '"""Beta."""\nfrom a import zzz_target\n\n\n'
+             'def quiet_caller(n):\n    return zzz_target(n)\n')
+        return root
+
+    def test_one_hop_caller_is_promoted(self):
+        with tempfile.TemporaryDirectory() as td:
+            doc = tier.from_repo(self._repo(td))
+            hits = context._symbol_hits(doc, "zzz_target")
+            names = [name for _sid, name in hits]
+            self.assertIn("zzz_target", names)
+            self.assertIn("quiet_caller", names,
+                          "the caller shares no query term but is one hop away")
+            self.assertLess(names.index("zzz_target"), names.index("quiet_caller"))
+
+    def test_one_hop_caller_reaches_the_packed_text(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._repo(td)
+            res = context.build_context(td, "zzz_target", budget_tokens=1500)
+            self.assertIn("quiet_caller", res["text"])
+
+    def test_symbol_hits_ignores_stopwords(self):
+        with tempfile.TemporaryDirectory() as td:
+            _put(td, "a.py", '"""A."""\n\n\ndef is_ready():\n    return True\n')
+            doc = tier.from_repo(td)
+            self.assertEqual(context._symbol_hits(doc, "is the what how"), [],
+                             "'is' must not prefix-match is_ready")
+
+    def test_private_names_match_without_the_underscore(self):
+        with tempfile.TemporaryDirectory() as td:
+            _put(td, "a.py", '"""A."""\n\n\ndef _symbol_table(rows):\n    return rows\n')
+            doc = tier.from_repo(td)
+            hits = context._symbol_hits(doc, "symbol table")
+            self.assertIn("_symbol_table", [name for _sid, name in hits])
+
+
+class ImpactReservationTests(unittest.TestCase):
+    def test_impact_block_survives_a_tight_budget(self):
+        with tempfile.TemporaryDirectory() as td:
+            _two_module_repo(td)
+            for budget in (200, 400, 900, 2000):
+                res = context.build_context(td, "caller helper", budget_tokens=budget)
+                self.assertLessEqual(res["tokens"], budget, f"budget={budget}")
+
+    def test_impact_names_the_top_matched_symbol(self):
+        with tempfile.TemporaryDirectory() as td:
+            _two_module_repo(td)
+            res = context.build_context(td, "caller helper", budget_tokens=2000)
+            self.assertIn("## Impact:", res["text"])
+            self.assertIn("#", res["text"].split("## Impact: ", 1)[1].splitlines()[0])
+
+
 if __name__ == "__main__":
     unittest.main()

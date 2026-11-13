@@ -561,10 +561,14 @@ class T(unittest.TestCase):
                 text=True, capture_output=True, timeout=30, cwd=ROOT, env=ENV,
             )
             responses = {json.loads(line)["id"]: json.loads(line) for line in proc.stdout.splitlines()}
+            from tier.mcp import server as tier_mcp
+
             names = {t["name"] for t in responses[2]["result"]["tools"]}
-            self.assertTrue({"tier_list", "tier_index", "tier_find", "tier_get", "tier_slice",
-                             "tier_impact", "tier_sync", "tier_lint", "tier_ingest",
-                             "tier_repo", "tier_remember"} <= names)
+            # Exact equality, not a subset: a subset check passes when a tool is
+            # dropped from the surface, which is the regression worth catching.
+            self.assertEqual(names, {t["name"] for t in tier_mcp.TOOLS})
+            self.assertEqual(len(names), 12)
+            self.assertIn("tier_context", names)
             text = responses[3]["result"]["content"][0]["text"]
             self.assertIn("@demo.py", text)
 
@@ -1920,6 +1924,81 @@ class PerfAndSafety(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             self.assertEqual(calls[0], 5)
             self.assertEqual(len(out.splitlines()), 5)
+
+
+class ContextTrimming(unittest.TestCase):
+    """`build_context` must never report a slice that its trimming dropped."""
+
+    def setUp(self):
+        from tier import context as tier_context
+
+        self.context = tier_context
+
+    def sample(self, td):
+        _put(td, "a.py",
+             '"""Alpha."""\n\n\ndef helper(x):\n    return x + 1\n\n\n'
+             'def caller(n):\n    return helper(n)\n\n\ndef extra(n):\n    return n\n')
+        _put(td, "b.py", '"""Beta."""\nfrom a import caller\n\n\ndef top():\n    return caller(2)\n')
+        return td
+
+    def assert_consistent(self, res, budget):
+        text = res["text"]
+        for item in res["slices"]:
+            name = item.partition("#")[2]
+            self.assertIn(name, text, f"{item} reported but missing from text")
+        for sid in res["sections"]:
+            self.assertIn(f"@{sid}", text, f"section {sid} reported but missing from text")
+        self.assertLessEqual(res["tokens"], budget, "rendered tokens must honour the budget")
+        self.assertEqual(res["tokens"], tier.count_tokens([text])[0][0])
+
+    def test_reported_slices_survive_across_budgets(self):
+        with tempfile.TemporaryDirectory() as td:
+            self.sample(td)
+            for budget in (80, 120, 200, 300, 500, 800, 1200, 2000):
+                res = self.context.build_context(td, "caller helper extra top", budget_tokens=budget,
+                                                 session=tier.Session(), session_key=f"b{budget}")
+                self.assert_consistent(res, budget)
+
+    def test_trimming_drops_metadata_with_the_block(self):
+        """Force the join-drift trim; dropped blocks must leave `slices`/`sections`."""
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as td:
+            self.sample(td)
+            real = self.context._count
+
+            def drifting(text, fast=None):
+                value = real(text, fast=fast)
+                # Drift only the joined-document count, and only once a slice fence
+                # is present, so the trim loop actually drops a slice rather than
+                # simply refusing to pack one.
+                if text.startswith("## Context:") and "```" in text:
+                    return value + 5000
+                return value
+
+            with mock.patch.object(self.context, "_count", drifting):
+                res = self.context.build_context(td, "caller helper extra top", budget_tokens=900,
+                                                 session=tier.Session(), session_key="trim")
+            self.assertNotIn("```", res["text"], "the trim must have dropped the slice")
+            self.assertEqual(res["slices"], [],
+                             "a trimmed slice must not survive in the reported metadata")
+            for sid in res["sections"]:
+                self.assertIn(f"@{sid}", res["text"])
+
+    def test_full_drain_leaves_no_dangling_metadata(self):
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as td:
+            self.sample(td)
+            real = self.context._count
+
+            with mock.patch.object(self.context, "_count",
+                                   lambda t, fast=None: real(t, fast=fast) + 5000):
+                res = self.context.build_context(td, "caller helper extra top", budget_tokens=800,
+                                         session=tier.Session(), session_key="drain")
+            self.assertEqual(res["text"], "")
+            self.assertEqual(res["slices"], [])
+            self.assertEqual(res["sections"], [])
 
 
 def self_read(path):

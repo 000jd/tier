@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import tempfile
 
+from .cache import INGEST_KEEP, ingest_dir, prune_ingest
 from .converter import from_json, from_md
 from .models import Doc, Section, VERSION, _atomic_write, _clip
 from .parser import dumps, render_section, wrap_untrusted
+from .repo import _sha256
 from .retrieval import index
 from .tokens import count_tokens
 
@@ -156,8 +157,13 @@ def _fit_text(text: str, budget: int, fast: bool = None) -> str:
 
 
 def pipe_compress(text: str, fmt: str = "auto", max_tokens: int = None, out_path: str = None,
-                  fast: bool = None) -> str:
-    """Compress a stream; over budget, emit L0 + priority sections and save the full artifact."""
+                  fast: bool = None, artifact_dir: str = None, keep: int = INGEST_KEEP) -> str:
+    """Compress a stream; over budget, emit L0 + priority sections and save the full artifact.
+
+    Over budget without an explicit `out_path`, the artifact is written
+    content-addressed into the repository's cache directory so it stays readable
+    through `tier_get`/`tier_find` and never leaks a scratch file outside it.
+    """
     doc = from_stream(text, fmt)
     full = dumps(doc)
     over = False
@@ -168,9 +174,10 @@ def pipe_compress(text: str, fmt: str = "auto", max_tokens: int = None, out_path
         artifact = os.path.abspath(out_path)
         _atomic_write(artifact, full)
     elif over:
-        fd, artifact = tempfile.mkstemp(prefix="tier-pipe-", suffix=".tier")
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(full)
+        directory = artifact_dir or ingest_dir()
+        artifact = os.path.join(directory, f"ingest-{_sha256(full)[:12]}.tier")
+        _atomic_write(artifact, full)
+        prune_ingest(directory, keep)
     if not over:
         return full
 

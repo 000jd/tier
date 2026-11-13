@@ -160,28 +160,32 @@ bench_blind_retrieval,table,.
   size 110
 > src-tier-cli.py
 @src-tier-cache.py src/tier/cache.py
-? Repository-index cache resolution. `repo.tier` is a derived artifact, so requiring users to track one in their tree is friction. This...; symbols: cache_root, cache_path, cache_kind, is_cache_dir, resolve_doc, ensure_doc
+? Repository-index cache resolution. `repo.tier` is a derived artifact, so requiring users to track one in their tree is friction. This...; symbols: cache_root, cache_path, cache_kind, is_cache_dir, is_cache_path, ingest_dir, prune_ingest...
 = file
   path src/tier/cache.py
   language python
-  lines 260
-  sha256 c35331eda4a6e3b3
-  mtime 1794572762675260281
-  size 9729
-|symbols[12]{kind,name,signature,lines}
-function,cache_root,def cache_root() -> str,31-43
-function,_git_pointer,def _git_pointer(root: str) -> str,46-68
-function,_common_git_dir,def _common_git_dir(git_dir: str) -> str,71-92
-function,_git_dir,def _git_dir(root: str) -> str,95-114
-function,_writable_dir,def _writable_dir(path: str) -> bool,117-126
-function,cache_path,def cache_path(root: str) -> str,129-142
-function,cache_kind,"def cache_kind(path: str, root: str) -> str",145-156
-function,is_cache_dir,"def is_cache_dir(path: str, root: str='') -> bool",159-169
-function,_work_root_for,"def _work_root_for(path: str, hint: str='') -> str",172-195
-function,resolve_doc,"def resolve_doc(target=None, root=None)",198-218
-function,ensure_doc,"def ensure_doc(target=None, root=None, session=None, session_key: str='', write: bool=True)",221-245
-function,_write_owner,"def _write_owner(path: str, work_root: str) -> None",248-260
-|calls[19]{caller,callee,module}
+  lines 325
+  sha256 dd47e5e6eb8262e6
+  mtime 1794587906127133558
+  size 12028
+|symbols[16]{kind,name,signature,lines}
+function,cache_root,def cache_root() -> str,33-45
+function,_git_pointer,def _git_pointer(root: str) -> str,48-70
+function,_common_git_dir,def _common_git_dir(git_dir: str) -> str,73-94
+function,_git_dir,def _git_dir(root: str) -> str,97-116
+function,_writable_dir,def _writable_dir(path: str) -> bool,119-128
+function,cache_path,def cache_path(root: str) -> str,131-144
+function,cache_kind,"def cache_kind(path: str, root: str) -> str",147-158
+function,is_cache_dir,"def is_cache_dir(path: str, root: str='') -> bool",161-171
+function,_invisible_cache_dir,def _invisible_cache_dir(root: str) -> str,174-187
+function,is_cache_path,"def is_cache_path(path: str, root: str='') -> bool",190-199
+function,ingest_dir,def ingest_dir(root: str='') -> str,202-209
+function,prune_ingest,"def prune_ingest(directory: str, keep: int=INGEST_KEEP) -> list",212-234
+function,_work_root_for,"def _work_root_for(path: str, hint: str='') -> str",237-260
+function,resolve_doc,"def resolve_doc(target=None, root=None)",263-283
+function,ensure_doc,"def ensure_doc(target=None, root=None, session=None, session_key: str='', write: bool=True)",286-310
+function,_write_owner,"def _write_owner(path: str, work_root: str) -> None",313-325
+|calls[25]{caller,callee,module}
 _git_dir,_git_pointer,.
 _git_dir,_common_git_dir,.
 cache_path,_git_dir,.
@@ -189,6 +193,12 @@ cache_path,_writable_dir,.
 cache_path,cache_root,.
 is_cache_dir,cache_root,.
 is_cache_dir,cache_path,.
+_invisible_cache_dir,_git_dir,.
+_invisible_cache_dir,_writable_dir,.
+_invisible_cache_dir,cache_root,.
+is_cache_path,_inside,src/tier/models.py
+is_cache_path,_invisible_cache_dir,.
+ingest_dir,_invisible_cache_dir,.
 resolve_doc,_work_root_for,.
 resolve_doc,cache_kind,.
 resolve_doc,cache_path,.
@@ -269,34 +279,49 @@ main,to_obj,src/tier/parser.py
 = file
   path src/tier/context.py
   language python
-  lines 266
-  sha256 bb45b508fd484107
-  mtime 1794574021821813960
-  size 9820
-|symbols[7]{kind,name,signature,lines}
-function,_count,"def _count(text: str, fast=None) -> int",27-28
-function,_symbol_hits,"def _symbol_hits(doc: Doc, query: str) -> list",31-62
-function,_call_neighbourhood,"def _call_neighbourhood(doc: Doc, targets: list) -> set",65-79
-function,_calls_filter_for,"def _calls_filter_for(doc: Doc, targets: list, mode: str='auto')",82-111
-function,_impact_block,"def _impact_block(doc: Doc, root: str, target_id: str, symbol: str='') -> str",114-139
-function,build_context,"def build_context(target=None, query: str='', *, root=None, budget_tokens: int=DEFAULT_BUDGET, include_impact: bool=True, session: Session=None, session_key: str='', dedup: bool=True, fast=None, include_calls: str='auto') -> dict",142-255
-function,_render_section,"def _render_section(doc: Doc, sid: str, session: Session, key: str, dedup: bool, calls_filter=None) -> str",258-266
-|calls[17]{caller,callee,module}
+  lines 369
+  sha256 524fd2aee9d25e81
+  mtime 1794589688321980165
+  size 14825
+|symbols[11]{kind,name,signature,lines}
+function,_count,"def _count(text: str, fast=None) -> int",36-37
+function,_module_of,"def _module_of(doc: Doc, section_id: str) -> str",40-44
+function,_symbol_scores,"def _symbol_scores(doc: Doc, query: str) -> dict",47-84
+function,_symbol_hits,"def _symbol_hits(doc: Doc, query: str, anchors: int=MAX_SYMBOLS) -> list",87-120
+function,_one_hop,"def _one_hop(doc: Doc, key: str) -> list",123-128
+function,_call_neighbourhood,"def _call_neighbourhood(doc: Doc, targets: list) -> set",131-145
+function,_strip_span,def _strip_span(label: str) -> str,148-150
+function,_calls_filter_for,"def _calls_filter_for(doc: Doc, targets: list, mode: str='auto', module: str='', reach=None)",153-194
+function,_impact_block,"def _impact_block(doc: Doc, root: str, target_id: str, symbol: str='') -> str",197-222
+function,build_context,"def build_context(target=None, query: str='', *, root=None, budget_tokens: int=DEFAULT_BUDGET, include_impact: bool=True, session: Session=None, session_key: str='', dedup: bool=True, fast=None, include_calls: str='auto') -> dict",225-358
+function,_render_section,"def _render_section(doc: Doc, sid: str, session: Session, key: str, dedup: bool, calls_filter=None) -> str",361-369
+|calls[28]{caller,callee,module}
 _count,count_tokens,src/tier/tokens.py
-_symbol_hits,_symbol_rows,src/tier/repo.py
-_symbol_hits,_index_tokens,src/tier/retrieval.py
+_module_of,_repo_file_meta,src/tier/parser.py
+_symbol_scores,_symbol_rows,src/tier/repo.py
+_symbol_scores,_index_tokens,src/tier/retrieval.py
+_symbol_hits,_symbol_scores,.
+_symbol_hits,_symbol_key,src/tier/repo.py
+_symbol_hits,_one_hop,.
+_symbol_hits,_resolve_module,src/tier/repo.py
+_one_hop,_call_graph,src/tier/repo.py
+_one_hop,_strip_span,.
 _call_neighbourhood,_call_graph,src/tier/repo.py
+_call_neighbourhood,_strip_span,.
+_calls_filter_for,_call_neighbourhood,.
 _impact_block,impact,src/tier/repo.py
 build_context,ensure_doc,src/tier/cache.py
 build_context,find,src/tier/retrieval.py
 build_context,is_repo_doc,src/tier/parser.py
-build_context,_calls_filter_for,.
 build_context,_count,.
 build_context,_symbol_hits,.
 build_context,_symbol_key,src/tier/repo.py
-build_context,_render_section,.
+build_context,_call_neighbourhood,.
 build_context,_impact_block,.
+build_context,_calls_filter_for,.
+build_context,_render_section,.
 build_context,_clip,src/tier/models.py
+build_context,_module_of,.
 build_context,slice_symbols,src/tier/repo.py
 _render_section,render_section,src/tier/parser.py
 > src-tier-cache.py
@@ -760,22 +785,22 @@ _load,parse,.
 = file
   path src/tier/pipe.py
   language python
-  lines 321
-  sha256 450e27c52bdeb4ba
-  mtime 1794544128689329870
-  size 12322
+  lines 328
+  sha256 d596fbde0db3d86b
+  mtime 1794587932631117052
+  size 12709
 |symbols[10]{kind,name,signature,lines}
-function,detect_stream_format,def detect_stream_format(text: str) -> str,31-41
-function,_log_shape,def _log_shape(line: str) -> str,44-51
-function,log_doc,def log_doc(text: str) -> Doc,54-106
-function,from_stream,"def from_stream(text: str, fmt: str='auto') -> Doc",109-119
-function,_tokens,"def _tokens(text: str, fast: bool=None) -> int",122-123
-function,_fit_text,"def _fit_text(text: str, budget: int, fast: bool=None) -> str",126-155
-function,pipe_compress,"def pipe_compress(text: str, fmt: str='auto', max_tokens: int=None, out_path: str=None, fast: bool=None) -> str",158-210
-function,_text_fields,"def _text_fields(obj, prefix: str='', depth: int=0) -> list",213-225
-function,_probe_exact,def _probe_exact() -> bool,228-230
-function,hook_process,"def hook_process(text: str, max_tokens: int=600, fmt: str='auto', exact: bool=True) -> dict",233-321
-|calls[26]{caller,callee,module}
+function,detect_stream_format,def detect_stream_format(text: str) -> str,32-42
+function,_log_shape,def _log_shape(line: str) -> str,45-52
+function,log_doc,def log_doc(text: str) -> Doc,55-107
+function,from_stream,"def from_stream(text: str, fmt: str='auto') -> Doc",110-120
+function,_tokens,"def _tokens(text: str, fast: bool=None) -> int",123-124
+function,_fit_text,"def _fit_text(text: str, budget: int, fast: bool=None) -> str",127-156
+function,pipe_compress,"def pipe_compress(text: str, fmt: str='auto', max_tokens: int=None, out_path: str=None, fast: bool=None, artifact_dir: str=None, keep: int=INGEST_KEEP) -> str",159-217
+function,_text_fields,"def _text_fields(obj, prefix: str='', depth: int=0) -> list",220-232
+function,_probe_exact,def _probe_exact() -> bool,235-237
+function,hook_process,"def hook_process(text: str, max_tokens: int=600, fmt: str='auto', exact: bool=True) -> dict",240-328
+|calls[29]{caller,callee,module}
 log_doc,Doc,src/tier/models.py
 log_doc,_log_shape,.
 log_doc,Section,src/tier/models.py
@@ -795,6 +820,9 @@ pipe_compress,_atomic_write,src/tier/models.py
 pipe_compress,index,src/tier/retrieval.py
 pipe_compress,render_section,src/tier/parser.py
 pipe_compress,_tokens,.
+pipe_compress,prune_ingest,src/tier/cache.py
+pipe_compress,ingest_dir,src/tier/cache.py
+pipe_compress,_sha256,src/tier/repo.py
 _probe_exact,count_tokens,src/tier/tokens.py
 hook_process,_text_fields,.
 hook_process,count_tokens,src/tier/tokens.py
@@ -802,9 +830,11 @@ hook_process,_probe_exact,.
 hook_process,pipe_compress,.
 hook_process,_fit_text,.
 hook_process,_tokens,.
+> src-tier-cache.py
 > src-tier-converter.py
 > src-tier-models.py
 > src-tier-parser.py
+> src-tier-repo.py
 > src-tier-retrieval.py
 > src-tier-tokens.py
 @src-tier-plugin.py src/tier/plugin.py
@@ -1244,25 +1274,28 @@ main,build_server,.
 = file
   path src/tier/mcp/server.py
   language python
-  lines 557
-  sha256 426192c98e249842
-  mtime 1794574209291686636
-  size 23364
-|symbols[11]{kind,name,signature,lines}
-function,safe_target,def safe_target(path: str='') -> str,239-247
-function,safe,def safe(path: str) -> str,250-256
-function,safe_dir,def safe_dir(path: str) -> str,259-265
-function,safe_write,def safe_write(path: str) -> str,268-276
-function,load,def load(path: str) -> Doc,279-281
-function,_repo_signature,"def _repo_signature(p: str, doc: Doc) -> dict",284-304
-function,_signature_matches,def _signature_matches(sig: dict) -> bool,307-321
-function,_load_doc,"def _load_doc(path: str, auto_sync: bool=True)",324-358
-function,call,"def call(name: str, a: dict) -> str",361-486
-function,handle,def handle(msg: dict),489-520
-function,main,def main(),523-553
-|calls[41]{caller,callee,module}
-safe_target,_inside,src/tier/models.py
-safe,_inside,src/tier/models.py
+  lines 567
+  sha256 9c6e53e0472619f6
+  mtime 1794587952733104534
+  size 23770
+|symbols[12]{kind,name,signature,lines}
+function,_readable,def _readable(path: str) -> bool,239-245
+function,safe_target,def safe_target(path: str='') -> str,248-256
+function,safe,def safe(path: str) -> str,259-265
+function,safe_dir,def safe_dir(path: str) -> str,268-274
+function,safe_write,def safe_write(path: str) -> str,277-285
+function,load,def load(path: str) -> Doc,288-290
+function,_repo_signature,"def _repo_signature(p: str, doc: Doc) -> dict",293-313
+function,_signature_matches,def _signature_matches(sig: dict) -> bool,316-330
+function,_load_doc,"def _load_doc(path: str, auto_sync: bool=True)",333-367
+function,call,"def call(name: str, a: dict) -> str",370-496
+function,handle,def handle(msg: dict),499-530
+function,main,def main(),533-563
+|calls[44]{caller,callee,module}
+_readable,_inside,src/tier/models.py
+_readable,is_cache_path,src/tier/cache.py
+safe_target,_readable,.
+safe,_readable,.
 safe_dir,_inside,src/tier/models.py
 safe_write,_inside,src/tier/models.py
 load,parse,src/tier/parser.py
@@ -1297,6 +1330,7 @@ call,pipe_compress,src/tier/pipe.py
 call,_atomic_write,src/tier/models.py
 call,safe_dir,.
 call,count_tokens,src/tier/tokens.py
+call,ingest_dir,src/tier/cache.py
 call,_inside,src/tier/models.py
 call,parse,src/tier/parser.py
 call,is_cache_dir,src/tier/cache.py
@@ -1449,16 +1483,16 @@ SDKAdapterTests.test_all_twelve_tools_register_and_call,_put,.
 > src-tier-mcp-sdk_server.py
 > src-tier-ui.py
 @tests-test_tier.py tests/test_tier.py
-? tests/test_tier.py (python module); symbols: T, Audit, PerfAndSafety, self_read, shutil_which
+? tests/test_tier.py (python module); symbols: T, Audit, PerfAndSafety, ContextTrimming, self_read, shutil_which
 = file
   path tests/test_tier.py
   language python
-  lines 1946
-  sha256 97eccd0052950f44
-  mtime 1794574103532343022
-  size 95205
-|symbols[115]{kind,name,signature,lines}
-class,T,class T(unittest.TestCase),22-818
+  lines 2025
+  sha256 a8edc92e2dd47252
+  mtime 1794589677448791567
+  size 98896
+|symbols[122]{kind,name,signature,lines}
+class,T,class T(unittest.TestCase),22-822
 method,T.rt,"def rt(self, text)",23-25
 method,T.read,"def read(self, name)",27-29
 method,T.put,"def put(self, root, name, text)",31-38
@@ -1512,68 +1546,75 @@ method,T.test_pipe_budget_saves_artifact,def test_pipe_budget_saves_artifact(sel
 method,T.test_init_plugin_merges_mcp_and_writes_repo,def test_init_plugin_merges_mcp_and_writes_repo(self),501-524
 method,T.test_hybrid_search_repo_symbols,def test_hybrid_search_repo_symbols(self),526-530
 method,T.test_mcp_help_and_version_flags,def test_mcp_help_and_version_flags(self),532-547
-method,T.test_mcp_tool_surface_and_repo,def test_mcp_tool_surface_and_repo(self),549-569
-method,T.test_slice_exact_lines_and_context,def test_slice_exact_lines_and_context(self),571-591
-method,T.test_slice_session_dedup_and_force,def test_slice_session_dedup_and_force(self),593-603
-method,T.test_slice_rejects_path_traversal,def test_slice_rejects_path_traversal(self),605-612
-method,T.test_sync_modified_updates_ranges_and_invalidates,def test_sync_modified_updates_ranges_and_invalidates(self),614-638
-method,T.test_sync_added_deleted_and_cleans_refs,def test_sync_added_deleted_and_cleans_refs(self),640-657
-method,T.test_sync_upgrades_old_repo_without_fingerprints,def test_sync_upgrades_old_repo_without_fingerprints(self),659-672
-method,T.test_impact_forward_reverse_and_symbol,def test_impact_forward_reverse_and_symbol(self),674-689
-method,T.test_impact_git_fallback_changed_symbols,def test_impact_git_fallback_changed_symbols(self),691-702
-method,T.test_hook_process_and_malformed,def test_hook_process_and_malformed(self),704-714
-method,T.test_hook_cli,def test_hook_cli(self),716-727
-method,T.test_init_plugin_hook_settings,def test_init_plugin_hook_settings(self),729-746
-method,T.test_pyproject_and_version_metadata,def test_pyproject_and_version_metadata(self),748-767
-method,T.test_mcp_slice_and_impact,def test_mcp_slice_and_impact(self),769-792
-method,T.test_mcp_auto_sync_on_get_and_slice,def test_mcp_auto_sync_on_get_and_slice(self),794-818
-function,_put,"def _put(root, name, text)",820-827
-function,_read,def _read(path),830-832
-function,_rows,"def _rows(doc, sid)",835-841
-class,_MCPClient,class _MCPClient,844-884
-method,_MCPClient.__init__,"def __init__(self, root)",845-851
-method,_MCPClient.request,"def request(self, method, params=None)",853-863
-method,_MCPClient.call,"def call(self, name, arguments)",865-868
-method,_MCPClient.close,def close(self),870-884
-class,Audit,class Audit(unittest.TestCase),887-1486
-method,Audit.test_guard_collision_fuzz,def test_guard_collision_fuzz(self),888-924
-method,Audit.test_path_traversal_and_symlinks,def test_path_traversal_and_symlinks(self),926-986
-method,Audit.test_parser_state_machine_robustness,def test_parser_state_machine_robustness(self),988-1039
-method,Audit.test_slice_boundaries_multilang,def test_slice_boundaries_multilang(self),1041-1168
-method,Audit.test_python_fallback_js_arrow_and_unreadable,def test_python_fallback_js_arrow_and_unreadable(self),1170-1202
-method,Audit.test_mcp_live_edit_and_session_eviction,def test_mcp_live_edit_and_session_eviction(self),1204-1288
-method,Audit.test_pipe_hook_stress_and_budget,def test_pipe_hook_stress_and_budget(self),1290-1343
-method,Audit.test_impact_git_subdir_and_sync_edges,def test_impact_git_subdir_and_sync_edges(self),1345-1394
-method,Audit.test_polyglot_track_h,def test_polyglot_track_h(self),1396-1432
-method,Audit.test_blind_retrieval_track_i,def test_blind_retrieval_track_i(self),1434-1470
-method,Audit.test_ranking_priors,def test_ranking_priors(self),1472-1486
-class,PerfAndSafety,class PerfAndSafety(unittest.TestCase),1489-1922
-method,PerfAndSafety.test_df_cache_matches_uncached_scoring,def test_df_cache_matches_uncached_scoring(self),1490-1508
-method,PerfAndSafety._reference_find,"def _reference_find(doc, weights, k)",1510-1580
-method,PerfAndSafety.test_norm_plural_rules,def test_norm_plural_rules(self),1582-1593
-method,PerfAndSafety.test_token_worker_and_cache_exactness,def test_token_worker_and_cache_exactness(self),1595-1621
-method,PerfAndSafety.test_count_server_worker_roundtrip,def test_count_server_worker_roundtrip(self),1623-1634
-method,PerfAndSafety.test_fit_text_single_pass_budget,def test_fit_text_single_pass_budget(self),1636-1649
-method,PerfAndSafety.test_hook_without_exact_backend_stays_within_budget,def test_hook_without_exact_backend_stays_within_budget(self),1651-1664
-method,PerfAndSafety.test_hook_budget_is_exact_not_estimated,def test_hook_budget_is_exact_not_estimated(self),1666-1688
-method,PerfAndSafety.test_hook_passes_through_only_when_provably_small,def test_hook_passes_through_only_when_provably_small(self),1690-1694
-method,PerfAndSafety.test_hook_reports_counting_mode,def test_hook_reports_counting_mode(self),1696-1701
-method,PerfAndSafety.test_hook_fast_mode_is_biased_safe,def test_hook_fast_mode_is_biased_safe(self),1703-1709
-method,PerfAndSafety.test_malformed_table_row_count_capped_with_warning,def test_malformed_table_row_count_capped_with_warning(self),1711-1726
-method,PerfAndSafety.test_huge_but_wellformed_row_count_still_bounded,def test_huge_but_wellformed_row_count_still_bounded(self),1728-1731
-method,PerfAndSafety.test_sync_detects_same_size_edit_with_restored_mtime,def test_sync_detects_same_size_edit_with_restored_mtime(self),1733-1752
-method,PerfAndSafety.test_sync_rehash_flag_catches_what_stat_cache_misses,def test_sync_rehash_flag_catches_what_stat_cache_misses(self),1754-1764
-method,PerfAndSafety.test_sync_mtime_cache_heals_when_recorded_mtime_predates_map,def test_sync_mtime_cache_heals_when_recorded_mtime_predates_map(self),1766-1783
-method,PerfAndSafety.test_sync_rehash_keeps_clean_tree_clean,def test_sync_rehash_keeps_clean_tree_clean(self),1785-1792
-method,PerfAndSafety.test_remember_bounds,def test_remember_bounds(self),1794-1809
-method,PerfAndSafety.test_sync_fingerprint_matches_crlf_checkout,def test_sync_fingerprint_matches_crlf_checkout(self),1811-1835
-method,PerfAndSafety.test_sync_repo_stat_short_circuit,def test_sync_repo_stat_short_circuit(self),1837-1861
-method,PerfAndSafety.test_mcp_auto_sync_signature_cache,def test_mcp_auto_sync_signature_cache(self),1863-1897
-method,PerfAndSafety.test_mcp_list_batches_token_counting,def test_mcp_list_batches_token_counting(self),1899-1922
-function,self_read,def self_read(path),1925-1927
-function,shutil_which,def shutil_which(name),1930-1932
-function,_put,"def _put(root, name, text)",1935-1942
-|calls[75]{caller,callee,module}
+method,T.test_mcp_tool_surface_and_repo,def test_mcp_tool_surface_and_repo(self),549-573
+method,T.test_slice_exact_lines_and_context,def test_slice_exact_lines_and_context(self),575-595
+method,T.test_slice_session_dedup_and_force,def test_slice_session_dedup_and_force(self),597-607
+method,T.test_slice_rejects_path_traversal,def test_slice_rejects_path_traversal(self),609-616
+method,T.test_sync_modified_updates_ranges_and_invalidates,def test_sync_modified_updates_ranges_and_invalidates(self),618-642
+method,T.test_sync_added_deleted_and_cleans_refs,def test_sync_added_deleted_and_cleans_refs(self),644-661
+method,T.test_sync_upgrades_old_repo_without_fingerprints,def test_sync_upgrades_old_repo_without_fingerprints(self),663-676
+method,T.test_impact_forward_reverse_and_symbol,def test_impact_forward_reverse_and_symbol(self),678-693
+method,T.test_impact_git_fallback_changed_symbols,def test_impact_git_fallback_changed_symbols(self),695-706
+method,T.test_hook_process_and_malformed,def test_hook_process_and_malformed(self),708-718
+method,T.test_hook_cli,def test_hook_cli(self),720-731
+method,T.test_init_plugin_hook_settings,def test_init_plugin_hook_settings(self),733-750
+method,T.test_pyproject_and_version_metadata,def test_pyproject_and_version_metadata(self),752-771
+method,T.test_mcp_slice_and_impact,def test_mcp_slice_and_impact(self),773-796
+method,T.test_mcp_auto_sync_on_get_and_slice,def test_mcp_auto_sync_on_get_and_slice(self),798-822
+function,_put,"def _put(root, name, text)",824-831
+function,_read,def _read(path),834-836
+function,_rows,"def _rows(doc, sid)",839-845
+class,_MCPClient,class _MCPClient,848-888
+method,_MCPClient.__init__,"def __init__(self, root)",849-855
+method,_MCPClient.request,"def request(self, method, params=None)",857-867
+method,_MCPClient.call,"def call(self, name, arguments)",869-872
+method,_MCPClient.close,def close(self),874-888
+class,Audit,class Audit(unittest.TestCase),891-1490
+method,Audit.test_guard_collision_fuzz,def test_guard_collision_fuzz(self),892-928
+method,Audit.test_path_traversal_and_symlinks,def test_path_traversal_and_symlinks(self),930-990
+method,Audit.test_parser_state_machine_robustness,def test_parser_state_machine_robustness(self),992-1043
+method,Audit.test_slice_boundaries_multilang,def test_slice_boundaries_multilang(self),1045-1172
+method,Audit.test_python_fallback_js_arrow_and_unreadable,def test_python_fallback_js_arrow_and_unreadable(self),1174-1206
+method,Audit.test_mcp_live_edit_and_session_eviction,def test_mcp_live_edit_and_session_eviction(self),1208-1292
+method,Audit.test_pipe_hook_stress_and_budget,def test_pipe_hook_stress_and_budget(self),1294-1347
+method,Audit.test_impact_git_subdir_and_sync_edges,def test_impact_git_subdir_and_sync_edges(self),1349-1398
+method,Audit.test_polyglot_track_h,def test_polyglot_track_h(self),1400-1436
+method,Audit.test_blind_retrieval_track_i,def test_blind_retrieval_track_i(self),1438-1474
+method,Audit.test_ranking_priors,def test_ranking_priors(self),1476-1490
+class,PerfAndSafety,class PerfAndSafety(unittest.TestCase),1493-1926
+method,PerfAndSafety.test_df_cache_matches_uncached_scoring,def test_df_cache_matches_uncached_scoring(self),1494-1512
+method,PerfAndSafety._reference_find,"def _reference_find(doc, weights, k)",1514-1584
+method,PerfAndSafety.test_norm_plural_rules,def test_norm_plural_rules(self),1586-1597
+method,PerfAndSafety.test_token_worker_and_cache_exactness,def test_token_worker_and_cache_exactness(self),1599-1625
+method,PerfAndSafety.test_count_server_worker_roundtrip,def test_count_server_worker_roundtrip(self),1627-1638
+method,PerfAndSafety.test_fit_text_single_pass_budget,def test_fit_text_single_pass_budget(self),1640-1653
+method,PerfAndSafety.test_hook_without_exact_backend_stays_within_budget,def test_hook_without_exact_backend_stays_within_budget(self),1655-1668
+method,PerfAndSafety.test_hook_budget_is_exact_not_estimated,def test_hook_budget_is_exact_not_estimated(self),1670-1692
+method,PerfAndSafety.test_hook_passes_through_only_when_provably_small,def test_hook_passes_through_only_when_provably_small(self),1694-1698
+method,PerfAndSafety.test_hook_reports_counting_mode,def test_hook_reports_counting_mode(self),1700-1705
+method,PerfAndSafety.test_hook_fast_mode_is_biased_safe,def test_hook_fast_mode_is_biased_safe(self),1707-1713
+method,PerfAndSafety.test_malformed_table_row_count_capped_with_warning,def test_malformed_table_row_count_capped_with_warning(self),1715-1730
+method,PerfAndSafety.test_huge_but_wellformed_row_count_still_bounded,def test_huge_but_wellformed_row_count_still_bounded(self),1732-1735
+method,PerfAndSafety.test_sync_detects_same_size_edit_with_restored_mtime,def test_sync_detects_same_size_edit_with_restored_mtime(self),1737-1756
+method,PerfAndSafety.test_sync_rehash_flag_catches_what_stat_cache_misses,def test_sync_rehash_flag_catches_what_stat_cache_misses(self),1758-1768
+method,PerfAndSafety.test_sync_mtime_cache_heals_when_recorded_mtime_predates_map,def test_sync_mtime_cache_heals_when_recorded_mtime_predates_map(self),1770-1787
+method,PerfAndSafety.test_sync_rehash_keeps_clean_tree_clean,def test_sync_rehash_keeps_clean_tree_clean(self),1789-1796
+method,PerfAndSafety.test_remember_bounds,def test_remember_bounds(self),1798-1813
+method,PerfAndSafety.test_sync_fingerprint_matches_crlf_checkout,def test_sync_fingerprint_matches_crlf_checkout(self),1815-1839
+method,PerfAndSafety.test_sync_repo_stat_short_circuit,def test_sync_repo_stat_short_circuit(self),1841-1865
+method,PerfAndSafety.test_mcp_auto_sync_signature_cache,def test_mcp_auto_sync_signature_cache(self),1867-1901
+method,PerfAndSafety.test_mcp_list_batches_token_counting,def test_mcp_list_batches_token_counting(self),1903-1926
+class,ContextTrimming,class ContextTrimming(unittest.TestCase),1929-2001
+method,ContextTrimming.setUp,def setUp(self),1932-1935
+method,ContextTrimming.sample,"def sample(self, td)",1937-1942
+method,ContextTrimming.assert_consistent,"def assert_consistent(self, res, budget)",1944-1952
+method,ContextTrimming.test_reported_slices_survive_across_budgets,def test_reported_slices_survive_across_budgets(self),1954-1960
+method,ContextTrimming.test_trimming_drops_metadata_with_the_block,def test_trimming_drops_metadata_with_the_block(self),1962-1986
+method,ContextTrimming.test_full_drain_leaves_no_dangling_metadata,def test_full_drain_leaves_no_dangling_metadata(self),1988-2001
+function,self_read,def self_read(path),2004-2006
+function,shutil_which,def shutil_which(name),2009-2011
+function,_put,"def _put(root, name, text)",2014-2021
+|calls[83]{caller,callee,module}
 T,put,.
 T,read,.
 T,symbols_of,.
@@ -1649,20 +1690,29 @@ PerfAndSafety.test_sync_fingerprint_matches_crlf_checkout,_put,.
 PerfAndSafety.test_sync_repo_stat_short_circuit,_put,.
 PerfAndSafety.test_mcp_auto_sync_signature_cache,_put,.
 PerfAndSafety.test_mcp_list_batches_token_counting,_put,.
+ContextTrimming,_put,.
+ContextTrimming,sample,.
+ContextTrimming,assert_consistent,.
+ContextTrimming.sample,_put,.
+ContextTrimming.test_reported_slices_survive_across_budgets,sample,.
+ContextTrimming.test_reported_slices_survive_across_budgets,assert_consistent,.
+ContextTrimming.test_trimming_drops_metadata_with_the_block,sample,.
+ContextTrimming.test_full_drain_leaves_no_dangling_metadata,sample,.
 > src-tier-__init__.py
+> src-tier-context.py
 > src-tier-mcp-__init__.py
 > src-tier-mcp-server.py
 > src-tier-tokens.py
 @tests-test_v110.py tests/test_v110.py
-? Tests for v1.1.0: composite context, repository cache, call graph, tree-sitter.; symbols: ContextTests, WorktreeCacheTests, CallFilterTests, CacheTests, CallGraphTests, TreeSitterTests, InstallerSkillTests
+? Tests for v1.1.0: composite context, repository cache, call graph, tree-sitter.; symbols: ContextTests, WorktreeCacheTests, CallFilterTests, CacheTests, CallGraphTests, TreeSitterTests, InstallerSkillTests, IngestArtifactTests
 = file
   path tests/test_v110.py
   language python
-  lines 662
-  sha256 4ff98a91efc0dd91
-  mtime 1794574180113756752
-  size 30725
-|symbols[59]{kind,name,signature,lines}
+  lines 837
+  sha256 53c595c7fc73e0f3
+  mtime 1794588749822608140
+  size 38728
+|symbols[79]{kind,name,signature,lines}
 function,_put,"def _put(root, name, text)",24-31
 function,_read,def _read(path),34-36
 function,_tokens,def _tokens(text),39-40
@@ -1722,7 +1772,27 @@ method,TreeSitterTests.test_mocked_pack_is_used_and_failure_falls_back,def test_
 method,TreeSitterTests.test_doctor_reports_treesitter,def test_doctor_reports_treesitter(self),643-651
 class,InstallerSkillTests,class InstallerSkillTests(unittest.TestCase),654-658
 method,InstallerSkillTests.test_skill_mentions_context_tool,def test_skill_mentions_context_tool(self),655-658
-|calls[59]{caller,callee,module}
+class,IngestArtifactTests,class IngestArtifactTests(unittest.TestCase),661-774
+method,IngestArtifactTests._call,"def _call(self, td, **args)",664-675
+method,IngestArtifactTests._artifact,"def _artifact(self, td, cache_dir)",677-691
+method,IngestArtifactTests._read,"def _read(self, td, cache_dir, name, args)",693-708
+method,IngestArtifactTests.test_over_budget_artifact_lands_in_cache_not_tmp,def test_over_budget_artifact_lands_in_cache_not_tmp(self),710-717
+method,IngestArtifactTests.test_artifact_round_trips_through_get,def test_artifact_round_trips_through_get(self),719-723
+method,IngestArtifactTests.test_artifact_is_findable,def test_artifact_is_findable(self),725-729
+method,IngestArtifactTests.test_non_cache_path_is_still_rejected,def test_non_cache_path_is_still_rejected(self),731-745
+method,IngestArtifactTests.test_artifact_is_content_addressed,def test_artifact_is_content_addressed(self),747-752
+method,IngestArtifactTests.test_prune_ingest_keeps_newest,def test_prune_ingest_keeps_newest(self),754-764
+method,IngestArtifactTests.test_no_tier_pipe_temp_files_are_created,def test_no_tier_pipe_temp_files_are_created(self),766-774
+class,RoutingTests,class RoutingTests(unittest.TestCase),777-817
+method,RoutingTests._repo,"def _repo(self, root)",780-787
+method,RoutingTests.test_one_hop_caller_is_promoted,def test_one_hop_caller_is_promoted(self),789-797
+method,RoutingTests.test_one_hop_caller_reaches_the_packed_text,def test_one_hop_caller_reaches_the_packed_text(self),799-803
+method,RoutingTests.test_symbol_hits_ignores_stopwords,def test_symbol_hits_ignores_stopwords(self),805-810
+method,RoutingTests.test_private_names_match_without_the_underscore,def test_private_names_match_without_the_underscore(self),812-817
+class,ImpactReservationTests,class ImpactReservationTests(unittest.TestCase),820-833
+method,ImpactReservationTests.test_impact_block_survives_a_tight_budget,def test_impact_block_survives_a_tight_budget(self),821-826
+method,ImpactReservationTests.test_impact_names_the_top_matched_symbol,def test_impact_names_the_top_matched_symbol(self),828-833
+|calls[82]{caller,callee,module}
 _two_module_repo,_put,.
 ContextTests,_two_module_repo,.
 ContextTests,_put,.
@@ -1782,6 +1852,29 @@ TreeSitterTests,_put,.
 TreeSitterTests.test_ts_only_extensions_hidden_without_extra,_put,.
 TreeSitterTests.test_ts_only_extensions_visible_with_extra,_put,.
 TreeSitterTests.test_doctor_reports_treesitter,_put,.
+IngestArtifactTests,_put,.
+IngestArtifactTests,_call,.
+IngestArtifactTests,_artifact,.
+IngestArtifactTests,_read,.
+IngestArtifactTests._artifact,_put,.
+IngestArtifactTests._artifact,_call,.
+IngestArtifactTests.test_over_budget_artifact_lands_in_cache_not_tmp,_artifact,.
+IngestArtifactTests.test_artifact_round_trips_through_get,_artifact,.
+IngestArtifactTests.test_artifact_round_trips_through_get,_read,.
+IngestArtifactTests.test_artifact_is_findable,_artifact,.
+IngestArtifactTests.test_artifact_is_findable,_read,.
+IngestArtifactTests.test_artifact_is_content_addressed,_artifact,.
+IngestArtifactTests.test_no_tier_pipe_temp_files_are_created,_artifact,.
+RoutingTests,_put,.
+RoutingTests,_repo,.
+RoutingTests._repo,_put,.
+RoutingTests.test_one_hop_caller_is_promoted,_repo,.
+RoutingTests.test_one_hop_caller_reaches_the_packed_text,_repo,.
+RoutingTests.test_symbol_hits_ignores_stopwords,_put,.
+RoutingTests.test_private_names_match_without_the_underscore,_put,.
+ImpactReservationTests,_two_module_repo,.
+ImpactReservationTests.test_impact_block_survives_a_tight_budget,_two_module_repo,.
+ImpactReservationTests.test_impact_names_the_top_matched_symbol,_two_module_repo,.
 > src-tier-__init__.py
 > src-tier-cache.py
 > src-tier-context.py

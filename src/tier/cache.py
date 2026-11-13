@@ -20,12 +20,14 @@ import hashlib
 import os
 import sys
 
-from .models import _atomic_write
+from .models import _atomic_write, _inside
 from .parser import _load, dumps, is_repo_doc
 from .repo import from_repo, sync_repo
 
 CACHE_DIR_ENV = "TIER_CACHE_DIR"
 CACHE_FILENAME = "repo.tier"
+INGEST_DIRNAME = "ingest"
+INGEST_KEEP = 32
 
 
 def cache_root() -> str:
@@ -167,6 +169,69 @@ def is_cache_dir(path: str, root: str = "") -> bool:
     if digest_dir:
         roots.add(digest_dir)
     return any(path == r or path.startswith(r + os.sep) for r in roots if r)
+
+
+def _invisible_cache_dir(root: str) -> str:
+    """Directory for cache side artifacts, never inside the working tree.
+
+    Deliberately ignores a tracked `<root>/repo.tier`: the map may be checked in,
+    but scratch artifacts must not appear as untracked files in the checkout.
+    """
+    root = os.path.abspath(root)
+    git = _git_dir(root)
+    if git:
+        info_dir = os.path.join(git, "info", "tier")
+        if _writable_dir(info_dir):
+            return info_dir
+    digest = hashlib.sha256(os.path.realpath(root).encode("utf-8", "replace")).hexdigest()[:12]
+    return os.path.join(cache_root(), digest)
+
+
+def is_cache_path(path: str, root: str = "") -> bool:
+    """True when `path` resolves inside the invisible cache directory for `root`.
+
+    Stricter than `is_cache_dir`, which matches any path containing an
+    `info/tier` segment because it only exists to prune directory listings.
+    Confinement decisions need the exact resolved directory.
+    """
+    if not root:
+        return False
+    return _inside(os.path.realpath(_invisible_cache_dir(root)), os.path.realpath(path))
+
+
+def ingest_dir(root: str = "") -> str:
+    """Sibling of the map where over-budget ingest artifacts are stored.
+
+    Inherits the map's invisible location, so it lands in
+    `<gitdir>/info/tier/ingest/` for a repository and in the per-root user cache
+    otherwise, and stays readable by every tool that can read the map.
+    """
+    return os.path.join(_invisible_cache_dir(root or os.getcwd()), INGEST_DIRNAME)
+
+
+def prune_ingest(directory: str, keep: int = INGEST_KEEP) -> list:
+    """Delete all but the newest `keep` ingest artifacts. Returns deleted paths."""
+    try:
+        names = [n for n in os.listdir(directory) if n.startswith("ingest-") and n.endswith(".tier")]
+    except OSError:
+        return []
+
+    def mtime(name):
+        try:
+            return os.stat(os.path.join(directory, name)).st_mtime
+        except OSError:
+            return 0.0
+
+    names.sort(key=mtime, reverse=True)
+    removed = []
+    for name in names[max(0, int(keep)):]:
+        path = os.path.join(directory, name)
+        try:
+            os.unlink(path)
+            removed.append(path)
+        except OSError:
+            pass
+    return removed
 
 
 def _work_root_for(path: str, hint: str = "") -> str:

@@ -21,7 +21,7 @@ import os
 import sys
 import time
 
-from ..cache import ensure_doc, is_cache_dir
+from ..cache import ensure_doc, ingest_dir, is_cache_dir, is_cache_path
 from ..context import build_context
 from ..lint import lint
 from ..memory import remember
@@ -236,11 +236,20 @@ TOOLS = [
 ]
 
 
+def _readable(path: str) -> bool:
+    """True when an already-resolved path may be read by a tool.
+
+    Reads are allowed from the repository root and from the repository's own
+    cache directory, so ingest artifacts written there can be fetched back.
+    """
+    return _inside(ROOT, path) or is_cache_path(path, ROOT)
+
+
 def safe_target(path: str = "") -> str:
     """Confine a target that may be a .tier file *or* a directory under ROOT."""
     raw = str(path or ".").strip() or "."
     p = os.path.realpath(os.path.join(ROOT, raw))
-    if not _inside(ROOT, p):
+    if not _readable(p):
         raise ValueError("path escapes root")
     if not os.path.exists(p):
         raise ValueError(f"no such path: {path}")
@@ -249,7 +258,7 @@ def safe_target(path: str = "") -> str:
 
 def safe(path: str) -> str:
     p = os.path.realpath(os.path.join(ROOT, path))
-    if not _inside(ROOT, p):
+    if not _readable(p):
         raise ValueError("path escapes root")
     if not p.endswith(".tier") or not os.path.isfile(p):
         raise ValueError(f"no such .tier doc: {path}")
@@ -462,7 +471,8 @@ def call(name: str, a: dict) -> str:
         out_path = safe_write(a["save_as"]) if a.get("save_as") else None
         max_tokens = a.get("max_tokens")
         if max_tokens is not None:
-            return pipe_compress(content, fmt, int(max_tokens), out_path)
+            return pipe_compress(content, fmt, int(max_tokens), out_path,
+                                 artifact_dir=ingest_dir(ROOT))
         d = from_stream(content, fmt)
         full = dumps(d)
         if out_path:

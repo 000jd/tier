@@ -239,7 +239,7 @@ next fetch re-reads it rather than serving the pre-write body.
 - JSON object arrays become header-once tables and nested objects become key/value trees.
 - Markdown uses `from-md`.
 - Log lines are normalized into shapes so repeated or near-identical lines collapse into count annotations. Error and warning lines go to an `@errors` section, command lines to `@commands`, and the remaining raw excerpt is wrapped in a collision-safe `<<<stream #guard ... >>>guard` block.
-- `--max-tokens N` caps the output: the command emits the L0 index plus the highest-priority sections that fit, saves the full `.tier` artifact to `--out` or a temporary file, and names the artifact so remaining sections can be fetched later. The artifact path is always emitted, so a budget below the path's own token cost is best-effort; otherwise the result fits the cap.
+- `--max-tokens N` caps the output: the command emits the L0 index plus the highest-priority sections that fit, saves the full `.tier` artifact, and names the artifact so remaining sections can be fetched later. `--out` places it explicitly; otherwise it is written content-addressed as `<cache dir>/ingest/ingest-<hash>.tier`, and that directory is pruned to the newest 32 files on every write. Over MCP the same artifacts stay readable through `tier_get`, `tier_find`, `tier_index`, and `tier_lint`, which accept paths under the resolved cache as well as under the root. The artifact path is always emitted, so a budget below the path's own token cost is best-effort; otherwise the result fits the cap.
 
 The MCP `tier_ingest` tool accepts Markdown, JSON, logs, `max_tokens`, and `save_as` for the same workflow.
 
@@ -293,10 +293,14 @@ The installer prefers an absolute `tier-mcp` executable and otherwise uses the a
 
 `tier context QUERY [PATH]` (MCP `tier_context`) answers a question in one call instead of
 `index` -> `find` -> `get` -> `slice`. It resolves the target, building or syncing the map if
-needed, routes with the hybrid retriever, and matches query tokens against symbol names. It then
-packs, in priority order, the top section bodies, the L3 slices for matched symbols, and a compact
-dependency summary, stopping before `budget_tokens` (default 3000) is exceeded. Section bodies and
-slices already delivered in the session are emitted as one-line stubs.
+needed, routes with the hybrid retriever, and matches query tokens against symbol names. The
+strongest name matches then pull in their immediate call neighbours, so a question phrased in terms
+of a callee still reaches the caller whose name shares no query term; a neighbour inherits a
+fraction of its anchor's score and so never outranks it. It then packs, in priority order, the top
+section bodies, the L3 slices for matched symbols, and a compact dependency summary, stopping
+before `budget_tokens` (default 3000) is exceeded. The dependency summary is sized before the
+bodies are packed and its space is held, so it cannot be crowded out. Section bodies and slices
+already delivered in the session are emitted as one-line stubs.
 
 Call tables inside those bodies are narrowed to the matched symbols and their 1-hop neighbourhood;
 `include_calls="all"` renders them unfiltered. See [Call graph](#call-graph) for the modes.

@@ -325,9 +325,16 @@ Returns `level: message` lines, or `ok` when the document is clean.
 `auto` sniffs the payload: valid JSON is JSON, Markdown headings or fences are Markdown, anything
 else is log output. Without `max_tokens` the full TIER document (or its L0 index when `index_only`)
 is returned. With `max_tokens` the call routes through the pipe compressor: the full artifact is
-written to `save_as` or to a temporary file, and the response carries the artifact path, the L0
-index, and as many priority sections as fit — errors first, then commands, then sections with
-rules. `save_as` must end in `.tier` and stay under the root.
+written to `save_as`, and the response carries the artifact path, the L0 index, and as many
+priority sections as fit — errors first, then commands, then sections with rules. `save_as` must
+end in `.tier` and stay under the root.
+
+Without `save_as`, an over-budget payload is still preserved: the artifact is written
+content-addressed (`ingest-<hash>.tier`) into the repository's cache directory, beside the map but
+never inside the working tree. It stays readable through `tier_get`, `tier_find`, `tier_index`, and
+`tier_lint`, because those tools accept paths under the resolved cache in addition to paths under
+the root. The directory keeps the newest 32 artifacts and prunes the rest on write, so repeated
+ingests cannot accumulate. Writes — `save_as`, `tier_remember` — remain confined to the root.
 
 ### tier_repo
 

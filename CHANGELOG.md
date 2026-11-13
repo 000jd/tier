@@ -4,6 +4,17 @@ Notable changes to TIER, newest first. Entries follow the spirit of [Keep a Chan
 
 The distribution is published as `tier-ctx`; the import package, the CLI command, and the format extension are all `tier`.
 
+## [Unreleased]
+
+### Changed
+- `tier_context` routing now promotes the immediate call neighbours of the strongest symbol matches, not just symbols whose names share a query term. A question phrased in terms of a callee reaches the caller that invokes it, and a search for a symbol still reaches what it calls. The one-turn arm of `benchmarks/agent_ab.py` reaches full symbol recall at a 1500-token budget.
+- `tier_context` sizes the dependency summary before packing section bodies and holds its room, so the block that answers "what calls X" is no longer dropped when module bodies fill the budget first.
+- Symbol name matching ignores stopwords and treats a leading underscore as a privacy marker rather than part of the name, so `_symbol_table` matches "symbol table" and `is` no longer prefix-matches every `is_*` helper.
+
+### Fixed
+- Over-budget `tier_ingest` no longer writes its artifact to the system temp directory, where `tier_get`, `tier_find`, `tier_index`, and `tier_lint` rejected it as outside the root. The artifact is now written content-addressed into the repository's cache directory, readable by every read tool, and pruned to the newest 32 files. This also stops the unbounded accumulation of `tier-pipe-*.tier` files in `/tmp`.
+- The tool-surface test asserted a subset of names that omitted `tier_context`, so a dropped tool would have passed. It now asserts exact equality with `TOOLS` and pins the count at 12.
+
 ## [1.2.0]
 
 ### Added
