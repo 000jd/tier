@@ -159,7 +159,10 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue(settings["keep"])
             self.assertIn(tier.TIER_BEGIN, _read(os.path.join(root, "CLAUDE.md")))
             self.assertIn(tier.TIER_BEGIN, _read(os.path.join(root, "AGENTS.md")))
-            self.assertTrue(os.path.exists(os.path.join(root, "repo.tier")))
+            # The map is an invisible cache by default: it must not dirty the tree.
+            self.assertFalse(os.path.exists(os.path.join(root, "repo.tier")))
+            self.assertTrue(os.path.exists(result["repo"]["path"]))
+            self.assertIn(result["repo"]["cache_kind"], ("git", "cache", "tracked"))
             self.assertGreater(result["repo"]["raw_tokens"], 0)
 
     def test_install_is_idempotent(self):
@@ -772,7 +775,7 @@ class SDKAdapterTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('pip install "tier-ctx[mcp]"', stderr.getvalue())
 
-    def test_all_eleven_tools_register_and_call(self):
+    def test_all_twelve_tools_register_and_call(self):
         from tier.mcp import sdk_server
 
         class FakeServer:
@@ -795,7 +798,8 @@ class SDKAdapterTests(unittest.TestCase):
             _put(root, "repo.tier", tier.dumps(tier.from_repo(root)))
             srv = sdk_server.build_server(root, server_cls=FakeServer)
             self.assertEqual(set(srv.tools), {t["name"] for t in sdk_server.stdio.TOOLS})
-            self.assertEqual(len(srv.tools), 11)
+            self.assertEqual(len(srv.tools), 12)
+            self.assertEqual(next(iter(srv.tools)), "tier_context")
             self.assertIn("@demo.py", srv.tools["tier_index"]("repo.tier"))
             self.assertIn("repo.tier", srv.tools["tier_list"]())
 

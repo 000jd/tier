@@ -177,6 +177,18 @@ def run_doctor(root: str = ".", home: Optional[str] = None, env: Optional[dict] 
         if hook is not None:
             checks.append(hook)
 
+    from .repo import _ts_available, _ts_language_pack_version
+
+    if _ts_available():
+        version = _ts_language_pack_version()
+        checks.append(Check("treesitter", "PASS",
+                            f"tree-sitter-language-pack {version}; AST extraction for "
+                            "TS/JS/Go/Rust/C/C++/Java/Ruby"))
+    else:
+        checks.append(Check("treesitter", "INFO",
+                            "optional; stdlib extractors in use "
+                            '(install with `pip install "tier-ctx[treesitter]"`)'))
+
     if importlib.util.find_spec("mcp") is not None:
         checks.append(Check("mcp extra", "PASS", "official mcp SDK installed (SDK adapter available)"))
     else:

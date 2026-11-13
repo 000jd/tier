@@ -21,6 +21,8 @@ import os
 import sys
 import time
 
+from ..cache import ensure_doc, is_cache_dir
+from ..context import build_context
 from ..lint import lint
 from ..memory import remember
 from ..models import Doc, VERSION, _atomic_write, _inside
@@ -40,6 +42,35 @@ _SYNC_STATE = {}
 
 
 TOOLS = [
+    {
+        "name": "tier_context",
+        "description": "PRIMARY ENTRY POINT: answer a question about a codebase or document in ONE call. "
+        "Resolves (and auto-builds/syncs) the repository index, routes with hybrid search, matches "
+        "symbol names, then packs L2 section bodies, L3 source slices, and a dependency summary until "
+        "budget_tokens is reached. Use this first; fall back to the granular tier_* tools only when you "
+        "need a specific section id, symbol, or lint check.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language question or symbol names"},
+                "path": {
+                    "type": "string",
+                    "description": "Optional .tier file or directory; defaults to the server root's index",
+                },
+                "budget_tokens": {
+                    "type": "integer",
+                    "default": 3000,
+                    "description": "Maximum tokens of context to return",
+                },
+                "include_impact": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Include a compact dependency/impact summary for repo maps",
+                },
+            },
+            "required": ["query"],
+        },
+    },
     {
         "name": "tier_list",
         "description": "List available TIER docs with a one-line summary each. Call first to discover docs.",
@@ -198,6 +229,17 @@ TOOLS = [
 ]
 
 
+def safe_target(path: str = "") -> str:
+    """Confine a target that may be a .tier file *or* a directory under ROOT."""
+    raw = str(path or ".").strip() or "."
+    p = os.path.realpath(os.path.join(ROOT, raw))
+    if not _inside(ROOT, p):
+        raise ValueError("path escapes root")
+    if not os.path.exists(p):
+        raise ValueError(f"no such path: {path}")
+    return p
+
+
 def safe(path: str) -> str:
     p = os.path.realpath(os.path.join(ROOT, path))
     if not _inside(ROOT, p):
@@ -273,28 +315,38 @@ def _signature_matches(sig: dict) -> bool:
 
 
 def _load_doc(path: str, auto_sync: bool = True):
-    p = safe(path)
-    cached = _SYNC_STATE.get(p)
-    if auto_sync and cached and time.monotonic() - cached["at"] < AUTO_SYNC_TTL:
-        sig = cached["sig"]
-        if sig["root"] and _signature_matches(sig):
-            return p, cached["doc"]
-    with open(p, encoding="utf-8") as f:
-        doc = parse(f.read())
+    """Resolve `path` (a .tier file or a directory) and return (realpath, doc).
+
+    A directory, or the default ``.``, resolves through the repository cache, so
+    callers never have to know where the invisible map lives.
+    """
+    p = safe_target(path)
+    if os.path.isdir(p):
+        cache_path, doc, work_root = ensure_doc(p, session=SESSION, write=True)
+        p = cache_path
+    else:
+        work_root = os.path.dirname(p)
+        cached = _SYNC_STATE.get(p)
+        if auto_sync and cached and time.monotonic() - cached["at"] < AUTO_SYNC_TTL:
+            sig = cached["sig"]
+            if sig["root"] and _signature_matches(sig):
+                return p, cached["doc"]
+        with open(p, encoding="utf-8") as f:
+            doc = parse(f.read())
     if auto_sync and is_repo_doc(doc):
         try:
             res = sync_repo(
-                p, root=os.path.dirname(p), session=SESSION, session_key=p, write=True
+                p, root=work_root, session=SESSION, session_key=p, write=True
             )
             doc = res["doc"]
             sig = _repo_signature(p, doc)
-            sig["root"] = os.path.dirname(p)
+            sig["root"] = work_root
             _SYNC_STATE[p] = {"doc": doc, "sig": sig, "at": time.monotonic()}
         except (OSError, ValueError):
             pass
     elif is_repo_doc(doc):
         sig = _repo_signature(p, doc)
-        sig["root"] = os.path.dirname(p)
+        sig["root"] = work_root
         _SYNC_STATE[p] = {"doc": doc, "sig": sig, "at": time.monotonic()}
     return p, doc
 
@@ -302,10 +354,23 @@ def _load_doc(path: str, auto_sync: bool = True):
 def call(name: str, a: dict) -> str:
     if not isinstance(a, dict):
         raise ValueError("arguments must be an object")
+    if name == "tier_context":
+        target = safe_target(a.get("path") or ".")
+        resolved, _doc = _load_doc(a.get("path") or ".")
+        res = build_context(
+            target,
+            a.get("query", ""),
+            budget_tokens=int(a.get("budget_tokens", 3000)),
+            include_impact=bool(a.get("include_impact", True)),
+            session=SESSION,
+            session_key=resolved,
+        )
+        return res["text"] or "no context matched the query"
     if name == "tier_list":
         docs = []
         for dp, dirnames, fs in os.walk(ROOT):
-            dirnames.sort()
+            dirnames[:] = sorted(d for d in dirnames
+                                 if d != ".git" and not is_cache_dir(os.path.join(dp, d)))
             for f in sorted(fs):
                 if not f.endswith(".tier"):
                     continue

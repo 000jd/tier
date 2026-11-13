@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tier-ctx"
-version = "1.0.1"
+version = "1.1.0"
 description = "TIER: layered context, repository graphs, code slicing, and agent memory"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,7 +15,8 @@ dependencies = []
 [project.optional-dependencies]
 ui = ["rich>=13.0"]
 mcp = ["mcp>=2.0"]
-all = ["rich>=13.0", "mcp>=2.0"]
+treesitter = ["tree-sitter-language-pack>=0.7.0"]
+all = ["rich>=13.0", "mcp>=2.0", "tree-sitter-language-pack>=0.7.0"]
 
 [project.scripts]
 tier = "tier.cli:main"

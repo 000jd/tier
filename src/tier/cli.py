@@ -30,6 +30,38 @@ def _stdin_text() -> str:
     return sys.stdin.read()
 
 
+def _resolve_target(target):
+    """Resolve a .tier file or directory to (path, doc, work_root).
+
+    Directories (and the default ``.``) go through the repository cache, so the
+    invisible map is built on first use and synced afterwards.
+    """
+    from .cache import ensure_doc
+
+    return ensure_doc(target or ".")
+
+def _split_slice_args(file_arg, module, symbols):
+    """Normalize the three slice forms to ``(map_target, module, [symbols])``.
+
+    Accepted:
+      ``slice MAP MODULE SYM...``  -- map first (a .tier path or a directory)
+      ``slice MODULE SYM...``      -- map defaults to the repository cache
+
+    Only a `.tier` path or an existing directory counts as the map. A module
+    argument routinely names a real source file (`a.py`), so a plain file must
+    not be mistaken for the map.
+    """
+    candidate = str(file_arg or ".")
+    symbols = list(symbols or [])
+    if candidate.endswith(".tier") or os.path.isdir(candidate):
+        return candidate, module or "", symbols
+    # Short form: argparse put MODULE in `file` and the first SYM in `module`.
+    first = module or ""
+    if first:
+        symbols.insert(0, first)
+    return ".", candidate, symbols
+
+
 def main(argv=None):
     try:
         sys.stdout.reconfigure(errors="replace")
@@ -41,20 +73,20 @@ def main(argv=None):
     ap.add_argument("-V", "--version", action="version", version=f"tier {_VERSION}")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("index", help="L0+L1: title, summary, rules, section index")
-    p.add_argument("file")
+    p.add_argument("file", nargs="?", default=".", help=".tier file or directory")
     p.add_argument("--no-tokens", action="store_true")
     p = sub.add_parser("get", help="fetch section(s) by id")
-    p.add_argument("file")
+    p.add_argument("file", nargs="?", default=".")
     p.add_argument("ids", nargs="+")
     p.add_argument("--follow", action="store_true", help="also pull 1-hop '>' references")
     p.add_argument("--table", choices=TABLE_MODES, default="raw",
                    help="table rendering: raw (on-disk), aligned, or anchored (LLM-optimized)")
     p = sub.add_parser("find", help="keyword search -> section ids")
-    p.add_argument("file")
+    p.add_argument("file", nargs="?", default=".")
     p.add_argument("query", nargs="+")
     p.add_argument("-k", type=int, default=3)
     p = sub.add_parser("lint")
-    p.add_argument("file")
+    p.add_argument("file", nargs="?", default=".")
     p = sub.add_parser("build", help="canonicalize (strip comments/blank lines)")
     p.add_argument("file")
     p.add_argument("-o")
@@ -124,21 +156,22 @@ def main(argv=None):
     p.add_argument("--plain", action="store_true")
     p.add_argument("--no-color", action="store_true")
     p = sub.add_parser("slice", help="fetch L3 source lines for named symbols")
-    p.add_argument("file")
-    p.add_argument("module")
-    p.add_argument("symbols", nargs="+")
+    p.add_argument("file", nargs="?", default=".",
+                   help=".tier file or directory (defaults to the auto-managed cache)")
+    p.add_argument("module", nargs="?")
+    p.add_argument("symbols", nargs="*")
     p.add_argument("--root")
     p.add_argument("--context", type=int, default=0)
     p.add_argument("--force", action="store_true")
     p = sub.add_parser("sync", help="incrementally refresh a repo.tier from source files")
-    p.add_argument("file")
+    p.add_argument("file", nargs="?", default=".")
     p.add_argument("--root")
     p.add_argument("--no-write", action="store_true")
     p.add_argument("--rehash", action="store_true",
                    help="ignore the mtime+size fast path and compare content hashes")
     p = sub.add_parser("impact", help="reverse dependency and blast-radius analysis")
-    p.add_argument("file")
-    p.add_argument("target")
+    p.add_argument("file", nargs="?", default=".")
+    p.add_argument("target", nargs="?")
     p.add_argument("--root")
     p.add_argument("--git", action="store_true")
     p = sub.add_parser("hook", help="Claude Code-style JSON hook filter on stdin")
@@ -153,6 +186,15 @@ def main(argv=None):
     p.add_argument("file")
     p = sub.add_parser("stats", help="token cost per layer / section")
     p.add_argument("file")
+    p = sub.add_parser("context",
+                       help="one-call context: route, pack L2/L3, and summarize impact")
+    p.add_argument("target", nargs="?", default=".",
+                   help=".tier file or directory (defaults to the auto-managed cache)")
+    p.add_argument("query", nargs="+")
+    p.add_argument("--budget-tokens", type=int, default=3000)
+    p.add_argument("--root")
+    p.add_argument("--no-impact", action="store_true")
+    p.add_argument("--no-dedup", action="store_true")
     a = ap.parse_args(argv)
 
     if a.cmd in ("install", "setup"):
@@ -299,10 +341,29 @@ def main(argv=None):
         sys.stdout.write(res["instructions"])
         return 0
 
-    if a.cmd == "slice":
-        root = a.root or os.path.dirname(os.path.abspath(a.file))
+    if a.cmd == "context":
+        from .context import build_context
+
         try:
-            text, missing = slice_symbols(_load(a.file), a.module, a.symbols, root, a.context)
+            res = build_context(
+                a.target, " ".join(a.query), root=a.root,
+                budget_tokens=a.budget_tokens,
+                include_impact=not a.no_impact, dedup=not a.no_dedup,
+            )
+        except (OSError, ValueError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        sys.stdout.write(res["text"] if res["text"].endswith("\n") else res["text"] + "\n")
+        return 0
+
+    if a.cmd == "slice":
+        # `tier slice repo.tier mod sym...` and `tier slice mod sym...` both work:
+        # a leading token that is not an existing .tier file is the module.
+        map_target, module, symbols = _split_slice_args(a.file, a.module, a.symbols)
+        try:
+            path, doc, work_root = _resolve_target(map_target)
+            root = a.root or work_root
+            text, missing = slice_symbols(doc, module, symbols, root, a.context)
         except (OSError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
@@ -315,7 +376,9 @@ def main(argv=None):
 
     if a.cmd == "sync":
         try:
-            res = sync_repo(a.file, root=a.root, write=not a.no_write, rehash=a.rehash)
+            path, doc, work_root = _resolve_target(a.file)
+            res = sync_repo(path, root=a.root or work_root,
+                            write=not a.no_write, rehash=a.rehash)
         except (OSError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
@@ -332,8 +395,14 @@ def main(argv=None):
 
     if a.cmd == "impact":
         try:
-            res = impact(_load(a.file), a.target,
-                         root=a.root or os.path.dirname(os.path.abspath(a.file)), git=a.git)
+            target = a.target
+            if target is None:
+                # `tier impact <target>`: no path given, so the first token is the target.
+                target = a.file
+                path, doc, work_root = _resolve_target(".")
+            else:
+                path, doc, work_root = _resolve_target(a.file)
+            res = impact(doc, target, root=a.root or work_root, git=a.git)
         except (OSError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
@@ -348,7 +417,11 @@ def main(argv=None):
         print(json.dumps(response, ensure_ascii=False))
         return 0
 
-    doc = _load(a.file)
+    try:
+        _path, doc, _work_root = _resolve_target(a.file)
+    except (OSError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     if a.cmd == "index":
         print(index(doc, tokens=not a.no_tokens))
     elif a.cmd == "get":

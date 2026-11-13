@@ -33,6 +33,10 @@ Thumbs.db
 .claude/settings.local.json
 *.bak
 
+# Local TIER repository caches (normally under .git/info, never tracked)
+.tier-cache/
+.owner
+
 # Temporary TIER artifacts
 tier-pipe-*.tier
 .tier-*.tmp

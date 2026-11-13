@@ -41,7 +41,7 @@ class T(unittest.TestCase):
         return {
             row[1]
             for node in tier.nodes(doc.by_id()[sid])
-            if node["t"] == "table"
+            if node["t"] == "table" and node["name"] == "symbols"
             for row in node["rows"]
         }
 
@@ -619,7 +619,8 @@ class T(unittest.TestCase):
             s.mark(path, "app-core.py")
             s.mark(path, "app-core.py#fetch")
             old = {row[1]: row for node in tier.nodes(d.by_id()["app-core.py"])
-                   if node["t"] == "table" for row in node["rows"]}
+                   if node["t"] == "table" and node["name"] == "symbols"
+                   for row in node["rows"]}
             old_start = int(old["fetch"][3].split("-")[0])
             original = self.read(os.path.join(td, "app/core.py"))
             self.put(td, "app/core.py", "# pad1\n# pad2\n" + original)
@@ -629,7 +630,8 @@ class T(unittest.TestCase):
             self.assertFalse(s.is_marked(path, "app-core.py"))
             self.assertFalse(s.is_marked(path, "app-core.py#fetch"))
             new = {row[1]: row for node in tier.nodes(res["doc"].by_id()["app-core.py"])
-                   if node["t"] == "table" for row in node["rows"]}
+                   if node["t"] == "table" and node["name"] == "symbols"
+                   for row in node["rows"]}
             new_start = int(new["fetch"][3].split("-")[0])
             self.assertEqual(new_start, old_start + 2)
             text, _ = tier.slice_symbols(res["doc"], "app-core.py", ["fetch"], root=td)
@@ -746,21 +748,23 @@ class T(unittest.TestCase):
     def test_pyproject_and_version_metadata(self):
         pyproject = self.read("pyproject.toml")
         self.assertIn('name = "tier-ctx"', pyproject)
-        self.assertIn('version = "1.0.1"', pyproject)
+        self.assertIn('version = "1.1.0"', pyproject)
         self.assertIn('tier = "tier.cli:main"', pyproject)
         self.assertIn('tier-mcp = "tier.mcp.server:main"', pyproject)
         self.assertIn('tier-mcp-sdk = "tier.mcp.sdk_server:main"', pyproject)
         self.assertIn("dependencies = []", pyproject)
         self.assertIn('ui = ["rich>=13.0"]', pyproject)
         self.assertIn('mcp = ["mcp>=2.0"]', pyproject)
+        self.assertIn('treesitter = ["tree-sitter-language-pack>=0.7.0"]', pyproject)
         self.assertIn("all = [", pyproject)
-        self.assertEqual(json.loads(self.read("benchmarks/package.json"))["version"], "1.0.1")
-        self.assertEqual(tier.VERSION, "1.0.1")
-        self.assertIn("# TIER v1.0.1", self.read("SPEC.md"))
-        self.assertIn("TIER v1.0.1", self.read("README.md"))
-        self.assertTrue(self.read("SPEC.tier").startswith("%tier 1.0.1"))
-        self.assertTrue(self.read("repo.tier").startswith("%tier 1.0.1"))
-        self.assertTrue(self.read("examples/payments-runbook.tier").startswith("%tier 1.0.1"))
+        self.assertEqual(json.loads(self.read("benchmarks/package.json"))["version"], "1.1.0")
+        self.assertEqual(tier.VERSION, "1.1.0")
+        self.assertIn("# TIER v1.1.0", self.read("SPEC.md"))
+        # The README no longer carries a version in its title; the CHANGELOG does.
+        self.assertIn("[1.1.0]", self.read("CHANGELOG.md"))
+        self.assertTrue(self.read("SPEC.tier").startswith("%tier 1.1.0"))
+        self.assertTrue(self.read("repo.tier").startswith("%tier 1.1.0"))
+        self.assertTrue(self.read("examples/payments-runbook.tier").startswith("%tier 1.1.0"))
 
     def test_mcp_slice_and_impact(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1423,7 +1427,9 @@ pub fn buffer() -> [u8; 32] {
             l2, _ = tier.get(doc, target_ids, follow=True)
             raw_t = tier._tokens(raw)
             surgical_t = tier._tokens(l0 + "\n" + l2 + "\n" + slices)
-            self.assertLess(surgical_t, raw_t * 0.35)
+            # Call tables add information (caller -> callee edges) to every
+            # module, so the surgical budget moved from 35% to 40% of raw.
+            self.assertLess(surgical_t, raw_t * 0.40)
 
     def test_blind_retrieval_track_i(self):
         corpus_dir = os.path.join(ROOT, "corpus")
@@ -1738,7 +1744,8 @@ class PerfAndSafety(unittest.TestCase):
             res = tier.sync_repo(path, root=td, rehash=True)
             self.assertIn("mod.py", res["changed"])
             names = {row[1] for node in tier.nodes(res["doc"].by_id()["mod.py"])
-                     if node["t"] == "table" for row in node["rows"]}
+                     if node["t"] == "table" and node["name"] == "symbols"
+                     for row in node["rows"]}
             self.assertIn("h", names)
             self.assertNotIn("f", names)
             text, _ = tier.slice_symbols(res["doc"], "mod.py", ["h"], root=td)

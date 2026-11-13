@@ -42,7 +42,7 @@ def _description(name: str) -> str:
 
 
 def build_server(root: str = ".", server_cls=None, server_name: str = "tier"):
-    """Build an official-SDK server exposing all 11 TIER tools."""
+    """Build an official-SDK server exposing all 12 TIER tools."""
     root = os.path.realpath(root or ".")
     if not os.path.isdir(root):
         raise ValueError(f"not a directory: {root}")
@@ -57,17 +57,26 @@ def build_server(root: str = ".", server_cls=None, server_name: str = "tier"):
     stdio.SESSION.reset()
     mcp = server_cls(server_name)
 
+    @mcp.tool(name="tier_context", description=_description("tier_context"))
+    def tier_context(query: str, path: Optional[str] = None, budget_tokens: int = 3000,
+                     include_impact: bool = True) -> str:
+        args = {"query": query, "budget_tokens": budget_tokens,
+                "include_impact": include_impact}
+        if path is not None:
+            args["path"] = path
+        return stdio.call("tier_context", args)
+
     @mcp.tool(name="tier_list", description=_description("tier_list"))
     def tier_list() -> str:
         return stdio.call("tier_list", {})
 
     @mcp.tool(name="tier_index", description=_description("tier_index"))
-    def tier_index(path: str) -> str:
-        return stdio.call("tier_index", {"path": path})
+    def tier_index(path: Optional[str] = None) -> str:
+        return stdio.call("tier_index", {"path": path or "."})
 
     @mcp.tool(name="tier_find", description=_description("tier_find"))
-    def tier_find(path: str, query: str, k: int = 3) -> str:
-        return stdio.call("tier_find", {"path": path, "query": query, "k": k})
+    def tier_find(query: str, path: Optional[str] = None, k: int = 3) -> str:
+        return stdio.call("tier_find", {"path": path or ".", "query": query, "k": k})
 
     @mcp.tool(name="tier_get", description=_description("tier_get"))
     def tier_get(path: str, ids: List[str], follow: bool = False,
@@ -87,12 +96,12 @@ def build_server(root: str = ".", server_cls=None, server_name: str = "tier"):
         })
 
     @mcp.tool(name="tier_impact", description=_description("tier_impact"))
-    def tier_impact(path: str, target: str, git: bool = False) -> str:
-        return stdio.call("tier_impact", {"path": path, "target": target, "git": git})
+    def tier_impact(target: str, path: Optional[str] = None, git: bool = False) -> str:
+        return stdio.call("tier_impact", {"path": path or ".", "target": target, "git": git})
 
     @mcp.tool(name="tier_sync", description=_description("tier_sync"))
-    def tier_sync(path: str) -> str:
-        return stdio.call("tier_sync", {"path": path})
+    def tier_sync(path: Optional[str] = None, rehash: bool = False) -> str:
+        return stdio.call("tier_sync", {"path": path or ".", "rehash": rehash})
 
     @mcp.tool(name="tier_lint", description=_description("tier_lint"))
     def tier_lint(path: str) -> str:

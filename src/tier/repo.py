@@ -29,6 +29,18 @@ LANG_BY_EXT = {
 }
 
 
+def _active_source_exts() -> set:
+    """Extensions to scan: always the stdlib set, plus TS-only ones when available.
+
+    Gating the extra languages behind Tree-sitter availability keeps a repo map
+    byte-identical with and without the optional extra, which the CI freshness
+    gate depends on.
+    """
+    if _ts_available():
+        return REPO_SOURCE_EXTS | REPO_TS_ONLY_EXTS
+    return REPO_SOURCE_EXTS
+
+
 def repo_source_files(root: str, max_file_bytes: int = 512 * 1024, max_files: int = 2000):
     """Yield (relative_path, absolute_path, extension) for source files under root.
 
@@ -43,7 +55,7 @@ def repo_source_files(root: str, max_file_bytes: int = 512 * 1024, max_files: in
             if name.startswith("."):
                 continue
             ext = os.path.splitext(name)[1].lower()
-            if ext not in REPO_SOURCE_EXTS:
+            if ext not in _active_source_exts():
                 continue
             full = os.path.join(dirpath, name)
             if os.path.islink(full):
@@ -591,8 +603,118 @@ def _rust_symbols(text: str):
     return _leading_comment(text, "//"), symbols, []
 
 
+# --------------------------------------------------------------------------- #
+# Optional Tree-sitter extraction
+# --------------------------------------------------------------------------- #
+
+_TS_LANG_BY_EXT = {
+    ".ts": "typescript", ".tsx": "tsx", ".js": "javascript", ".jsx": "javascript",
+    ".mjs": "javascript", ".cjs": "javascript", ".go": "go", ".rs": "rust",
+    ".c": "c", ".h": "c", ".cc": "cpp", ".cpp": "cpp", ".hpp": "cpp",
+    ".java": "java", ".rb": "ruby",
+}
+# Extensions that only become visible when Tree-sitter is installed. Keeping
+# them out of REPO_SOURCE_EXTS means a repo map is identical with and without
+# the optional extra, which the CI freshness gate depends on.
+REPO_TS_ONLY_EXTS = {".c", ".h", ".cc", ".cpp", ".hpp", ".java", ".rb"}
+
+_TS_STATE = {}
+
+
+def _ts_pack():
+    """Return the language pack module, or None. Never raises."""
+    if "pack" in _TS_STATE:
+        return _TS_STATE["pack"]
+    pack = None
+    try:
+        import tree_sitter_language_pack as pack  # type: ignore
+    except Exception:
+        pack = None
+    _TS_STATE["pack"] = pack
+    return pack
+
+
+def _ts_available() -> bool:
+    return _ts_pack() is not None
+
+
+def _ts_language_pack_version() -> str:
+    pack = _ts_pack()
+    if pack is None:
+        return ""
+    return str(getattr(pack, "__version__", "") or "installed")
+
+
+def _ts_node_name(node, source: bytes) -> str:
+    for field in ("name", "declarator"):
+        child = node.child_by_field_name(field)
+        if child is not None:
+            text = source[child.start_byte:child.end_byte].decode("utf-8", "replace").strip()
+            if text:
+                return text
+    return ""
+
+
+def _ts_symbols(text: str, lang: str):
+    """Extract symbols with Tree-sitter. Returns None when unavailable/unusable."""
+    pack = _ts_pack()
+    if pack is None:
+        return None
+    try:
+        parser = pack.get_parser(lang)
+        tree = parser.parse(text)
+    except Exception:
+        return None
+    source = text.encode("utf-8")
+    symbols, seen = [], set()
+    stack = [(tree.root_node, "")]
+    try:
+        while stack:
+            node, owner = stack.pop()
+            kind = node.type
+            name = ""
+            if kind in ("function_definition", "function_declaration", "function_item",
+                        "method_definition", "method_declaration", "constructor_declaration",
+                        "class_definition", "class_declaration", "struct_item", "enum_item",
+                        "trait_item", "impl_item", "module", "interface_declaration",
+                        "type_alias_declaration"):
+                name = _ts_node_name(node, source)
+            if name:
+                start = node.start_point[0] + 1
+                end = node.end_point[0] + 1
+                mapped = {
+                    "function_definition": "function", "function_declaration": "function",
+                    "function_item": "function", "method_definition": "method",
+                    "method_declaration": "method", "constructor_declaration": "method",
+                    "class_definition": "class", "class_declaration": "class",
+                    "struct_item": "struct", "enum_item": "enum", "trait_item": "trait",
+                    "impl_item": "impl", "module": "module",
+                    "interface_declaration": "interface", "type_alias_declaration": "type",
+                }.get(kind, kind)
+                full = f"{owner}.{name}" if owner and mapped in ("method", "function") else name
+                if (full, start) not in seen:
+                    seen.add((full, start))
+                    symbols.append((mapped, full, f"{mapped} {full}".strip(), start, end))
+                child_owner = name
+            else:
+                child_owner = owner
+            for child in node.children:
+                stack.append((child, child_owner))
+    except Exception:
+        return None
+    if not symbols:
+        return None
+    symbols.sort(key=lambda s: (s[3], s[1]))
+    return _leading_comment(text, "//"), symbols, []
+
+
 def _extract_symbols(rel: str, text: str):
     ext = os.path.splitext(rel)[1].lower()
+    lang = _TS_LANG_BY_EXT.get(ext)
+    if lang and _ts_available():
+        parsed = _ts_symbols(text, lang)
+        if parsed is not None:
+            return parsed
     if ext in (".py", ".pyi"):
         return _py_symbols(text)
     if ext in (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"):
@@ -602,6 +724,177 @@ def _extract_symbols(rel: str, text: str):
     if ext == ".rs":
         return _rust_symbols(text)
     return "", [], []
+
+
+# --------------------------------------------------------------------------- #
+# Symbol-level call edges
+# --------------------------------------------------------------------------- #
+
+_JS_CALL_RE = re.compile(r"(?:([A-Za-z_$][\w$]*)\s*\.\s*)?(?<![\w$.])([A-Za-z_$][\w$]*)\s*\(")
+_SELF_RECEIVERS = {"self", "cls", "this", "super"}
+_LEXICAL_SKIP_LINES = 1
+
+
+def _py_call_names(text: str, spans: list) -> list:
+    """Return [(caller_symbol, callee_name, line)] using the Python AST."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    out = []
+
+    def walk_calls(node, caller):
+        leaf_caller = caller.rsplit(".", 1)[-1]
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            func = child.func
+            if isinstance(func, ast.Name):
+                if func.id != leaf_caller:
+                    out.append((caller, func.id, getattr(child, "lineno", 0)))
+            elif isinstance(func, ast.Attribute):
+                if func.attr == leaf_caller:
+                    continue
+                base = func.value
+                if isinstance(base, ast.Name) and base.id in _SELF_RECEIVERS:
+                    out.append((caller, func.attr, getattr(child, "lineno", 0)))
+
+    for kind, name, _sig, _start, _end in spans:
+        node = _find_py_node(tree, name, kind)
+        if node is not None:
+            walk_calls(node, name)
+    return out
+
+
+def _find_py_node(tree, name: str, kind: str):
+    """Locate the AST node for a dotted symbol name such as `Class.method`."""
+    parts = name.split(".")
+    body = getattr(tree, "body", [])
+    node = None
+    for part in parts:
+        node = None
+        for candidate in body:
+            if getattr(candidate, "name", None) == part:
+                node = candidate
+                break
+        if node is None:
+            return None
+        body = getattr(node, "body", [])
+    return node
+
+
+def _lexical_call_names(lines: list, spans: list, ext: str) -> list:
+    """Return [(caller, callee, line)] by scanning each symbol's body span.
+
+    The declaration line is skipped so a definition cannot match itself, and
+    attribute calls are only accepted on `self`/`cls`/`this`/`super`, which
+    keeps external library calls (`os.path.join`, `asyncio.run`) out of the
+    graph while preserving intra-object method calls.
+    """
+    out = []
+    rust = ext == ".rs"
+    for _kind, name, _sig, start, end in spans:
+        in_block = False
+        for idx in range(max(0, start - 1), min(len(lines), end)):
+            code, in_block = _strip_code_strings(lines[idx], in_block, rust)
+            if idx - (start - 1) < _LEXICAL_SKIP_LINES:
+                continue
+            for match in _JS_CALL_RE.finditer(code):
+                receiver, callee = match.group(1), match.group(2)
+                if callee in JS_CONTROL:
+                    continue
+                if receiver and receiver not in _SELF_RECEIVERS:
+                    continue
+                if callee == name.rsplit(".", 1)[-1]:
+                    continue
+                out.append((name, callee, idx + 1))
+    return out
+
+
+def _extract_calls(rel: str, text: str, symbols: list, ext: str) -> list:
+    """Raw (caller, callee, line) triples found inside each symbol body."""
+    if not symbols:
+        return []
+    if ext in (".py", ".pyi"):
+        calls = _py_call_names(text, symbols)
+        if calls:
+            return calls
+    return _lexical_call_names(text.splitlines(), symbols, ext)
+
+
+def _build_symbol_index(infos: dict) -> dict:
+    """Map a symbol name to the module(s) that define it."""
+    index = {}
+    for rel, info in infos.items():
+        for _kind, name, _sig, _start, _end in info.get("symbols") or []:
+            index.setdefault(name, set()).add(rel)
+            leaf = name.rsplit(".", 1)[-1]
+            index.setdefault(leaf, set()).add(rel)
+    return index
+
+
+def _resolve_calls(rel: str, raw_calls: list, symbol_index: dict) -> list:
+    """Resolve raw callees to ``(caller, callee, target_rel)``.
+
+    ``target_rel`` is the defining module's relative path, or "" when the callee
+    lives in this same module. Ambiguous names that several modules define are
+    dropped rather than guessed, so an edge is only emitted when it is exact.
+    """
+    out, seen = [], set()
+    for caller, callee, _line in raw_calls:
+        leaf = callee.rsplit(".", 1)[-1]
+        homes = symbol_index.get(leaf) or symbol_index.get(callee)
+        if not homes:
+            continue
+        if rel in homes:
+            target = ""
+        elif len(homes) == 1:
+            target = next(iter(homes))
+        else:
+            continue
+        key = (caller, callee, target)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def _finalize_calls(infos: dict, module_to_rel: dict, existing: dict = None) -> None:
+    """Attach resolved call edges to every info dict, in place.
+
+    `existing` maps relative path -> already-rendered Section for modules this
+    sync did not re-parse. Their symbol tables still define names, so they join
+    the index or cross-file edges into unchanged modules would be dropped.
+    """
+    if not infos:
+        return
+    index = _build_symbol_index(infos)
+    for rel, sec in (existing or {}).items():
+        if rel in infos:
+            continue
+        for row in _symbol_rows(sec):
+            name = str(row.get("name") or "")
+            if not name:
+                continue
+            index.setdefault(name, set()).add(rel)
+            index.setdefault(name.rsplit(".", 1)[-1], set()).add(rel)
+    for rel, info in infos.items():
+        raw = info.get("raw_calls") or []
+        info["calls"] = _resolve_calls(rel, raw, index) if raw else []
+
+
+def _call_table(calls: list) -> list:
+    if not calls:
+        return []
+    lines = [f"|calls[{len(calls)}]{{caller,callee,module}}"]
+    for caller, callee, module in calls:
+        lines.append(_csv_row([
+            str(caller).replace("\x00", "\ufffd"),
+            str(callee).replace("\x00", "\ufffd"),
+            str(module or ".").replace("\x00", "\ufffd"),
+        ]))
+    return lines
 
 
 def _symbol_table(symbols: list) -> list:
@@ -765,6 +1058,7 @@ def _repo_info(rel: str, full: str, ext: str, text: str = None) -> dict:
     return {
         "rel": rel, "ext": ext, "text": text, "purpose": purpose,
         "symbols": symbols, "raw_imports": raw_imports,
+        "raw_calls": _extract_calls(rel, text, symbols, ext),
         "sha256": _sha256(text), "mtime_ns": mtime_ns,
         # On-disk byte size, not len(text): the reader uses universal newlines,
         # so a CRLF checkout would otherwise never match its own fingerprint.
@@ -806,6 +1100,9 @@ def _repo_section(info: dict, rel_to_id: dict) -> Section:
         f"  size {info['size']}",
     ]
     lines += _symbol_table(info["symbols"])
+    # Call edges precede the `>` refs: sync_repo's re-link pass rebuilds a
+    # section as `body + refs`, so anything after the refs would migrate.
+    lines += _call_table(info.get("calls") or [])
     for dep in sorted(info.get("deps", ())):
         target = rel_to_id.get(dep)
         if target:
@@ -836,6 +1133,7 @@ def from_repo(root: str, max_files: int = 2000) -> Doc:
     infos = [_repo_info(rel, full, ext) for rel, full, ext in files]
     for info in infos:
         _repo_add_deps(info, rel_set, module_to_rel, go_module)
+    _finalize_calls({info["rel"]: info for info in infos}, module_to_rel)
 
     doc = Doc()
     doc.meta["tier"] = VERSION
@@ -952,6 +1250,9 @@ def sync_repo(path: str, root: str = None, session: Session = None,
     for info in infos.values():
         _repo_add_deps(info, rel_set, module_to_rel, go_module)
 
+    # Call edges must resolve against every module in the map, not only the
+    # ones that changed, so index the unchanged sections too before rendering.
+    _finalize_calls(infos, module_to_rel, existing=existing)
     replaced = {rel: _repo_section(info, rel_to_id) for rel, info in infos.items()}
     deleted_ids = {existing[rel].id for rel in deleted}
     new_sections = []
@@ -1155,6 +1456,48 @@ def _reachable(graph: dict, start: str) -> list:
     return order
 
 
+def _call_graph(doc: Doc):
+    """Return (callers, callees) keyed by "module_rel#symbol".
+
+    Reads the compact ``|calls`` tables each module section carries. Values are
+    ``"module_rel#caller [Lstart-Lend]"`` strings so a report points at an exact
+    body span without the reader needing the symbol table.
+    """
+    callers, callees = {}, {}
+    for sec in doc.sections:
+        meta = _repo_file_meta(sec)
+        module = meta.get("path") if meta else ""
+        if not module:
+            continue
+        spans = {row["name"]: row.get("lines", "") for row in _symbol_rows(sec)}
+        for nd in nodes(sec):
+            if nd["t"] != "table" or nd["name"] != "calls":
+                continue
+            for row in nd["rows"]:
+                if len(row) < 3:
+                    continue
+                caller, callee, target = row[0], row[1], row[2]
+                target_mod = module if target in ("", ".") else target
+                lines = spans.get(caller, "")
+                label = f"{module}#{caller}" + (f" [{lines}]" if lines else "")
+                callers.setdefault(f"{target_mod}#{callee}", [])
+                if label not in callers[f"{target_mod}#{callee}"]:
+                    callers[f"{target_mod}#{callee}"].append(label)
+                home = f"{module}#{caller}"
+                callees.setdefault(home, [])
+                dep = f"{target_mod}#{callee}"
+                if dep not in callees[home]:
+                    callees[home].append(dep)
+    return callers, callees
+
+
+def _symbol_key(doc: Doc, section_id: str, symbol: str) -> str:
+    sec = doc.by_id().get(section_id)
+    meta = _repo_file_meta(sec) if sec is not None else {}
+    module = (meta.get("path") if meta else "") or (sec.title if sec is not None else "")
+    return f"{module}#{symbol}"
+
+
 def _resolve_impact_target(doc: Doc, target: str) -> str:
     target = str(target or "").strip().lstrip("@")
     by = doc.by_id()
@@ -1228,8 +1571,14 @@ def _changed_symbols(old_rows: list, ext: str, text: str):
 
 
 def impact(doc: Doc, target: str, root: str = None, git: bool = False) -> dict:
-    """Analyze forward dependencies, reverse dependents, and optional Git blast radius."""
+    """Analyze forward dependencies, reverse dependents, and optional Git blast radius.
+
+    A ``module#symbol`` or bare-symbol target additionally reports exact
+    symbol-level callers and callees from the ``|calls`` graph.
+    """
     root = os.path.abspath(root or os.getcwd())
+    raw_target = str(target or "").strip().lstrip("@")
+    symbol = raw_target.split("#", 1)[1] if "#" in raw_target else ""
     sid = _resolve_impact_target(doc, target)
     forward, reverse = _build_graph(doc)
     direct = reverse.get(sid, [])
@@ -1246,7 +1595,23 @@ def impact(doc: Doc, target: str, root: str = None, git: bool = False) -> dict:
         "changed_symbols": {},
         "affected": [],
         "source": "graph",
+        "symbol_target": "",
+        "symbol_dependents": [],
+        "call_dependencies": [],
     }
+    if not symbol:
+        # A bare symbol name that resolved to a single module: report its edges
+        # too, since that is the reason the caller asked for a symbol.
+        sec = doc.by_id().get(sid)
+        names = {row["name"] for row in _symbol_rows(sec)} if sec is not None else set()
+        if raw_target in names:
+            symbol = raw_target
+    if symbol:
+        callers, callees = _call_graph(doc)
+        key = _symbol_key(doc, sid, symbol)
+        result["symbol_target"] = key
+        result["symbol_dependents"] = sorted(callers.get(key, []))
+        result["call_dependencies"] = sorted(callees.get(key, []))
     if not git:
         return result
 
@@ -1311,6 +1676,10 @@ def render_impact(result: dict) -> str:
     out.append("Transitive dependents: " + (", ".join("@" + x for x in result["transitive_dependents"]) or "none"))
     out.append("Dependencies: " + (", ".join("@" + x for x in result["dependencies"]) or "none"))
     out.append("Transitive dependencies: " + (", ".join("@" + x for x in result["transitive_dependencies"]) or "none"))
+    if result.get("symbol_target"):
+        out.append("Symbol: " + result["symbol_target"])
+        out.append("Symbol callers: " + (", ".join(result.get("symbol_dependents") or []) or "none"))
+        out.append("Symbol calls: " + (", ".join(result.get("call_dependencies") or []) or "none"))
     if result.get("changed_modules") or result.get("changed_paths"):
         out.append("Git blast radius (" + result.get("source", "graph") + "):")
         out.append("Changed paths: " + (", ".join(result.get("changed_paths", [])) or "none"))
