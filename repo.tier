@@ -88,13 +88,13 @@ function,bench_blind_retrieval,def bench_blind_retrieval(),1357-1391
 = file
   path src/tier/cli.py
   language python
-  lines 350
-  sha256 1e2a0169d554e3dd
-  mtime 1794547524535591709
-  size 15108
+  lines 391
+  sha256 94f6c31293cb407f
+  mtime 1794555446776269461
+  size 16928
 |symbols[2]{kind,name,signature,lines}
-function,_stdin_text,def _stdin_text() -> str,22-26
-function,main,def main(argv=None),29-350
+function,_stdin_text,def _stdin_text() -> str,26-30
+function,main,def main(argv=None),33-391
 > src-tier-converter.py
 > src-tier-doctor.py
 > src-tier-installer.py
@@ -142,18 +142,18 @@ function,to_md,def to_md(doc: Doc) -> str,408-451
 = file
   path src/tier/doctor.py
   language python
-  lines 192
-  sha256 eb2ab3427dd9924a
-  mtime 1794543705580029238
-  size 8269
+  lines 200
+  sha256 eba96b4d296e4440
+  mtime 1794555400141049236
+  size 8523
 |symbols[7]{kind,name,signature,lines}
-class,Check,class Check,20-24
-function,_check_entry,"def _check_entry(spec: ClientSpec, root: str, find_executable) -> Check",27-65
-function,_hook_check,def _hook_check(spec: ClientSpec) -> Optional[Check],68-87
-function,run_doctor,"def run_doctor(root: str='.', home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, find_executable=None) -> List[Check]",90-173
-function,exit_code,def exit_code(checks: Sequence[Check]) -> int,176-177
-function,render,"def render(checks: Sequence[Check], ui: UI) -> None",180-188
-function,render_json,def render_json(checks: Sequence[Check]) -> str,191-192
+class,Check,class Check,22-26
+function,_check_entry,"def _check_entry(spec: ClientSpec, root: str, find_executable) -> Check",29-64
+function,_hook_check,def _hook_check(spec: ClientSpec) -> Optional[Check],67-86
+function,run_doctor,"def run_doctor(root: str='.', home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, find_executable=None) -> List[Check]",89-181
+function,exit_code,def exit_code(checks: Sequence[Check]) -> int,184-185
+function,render,"def render(checks: Sequence[Check], ui: UI) -> None",188-196
+function,render_json,def render_json(checks: Sequence[Check]) -> str,199-200
 > src-tier-installer.py
 > src-tier-lint.py
 > src-tier-parser.py
@@ -161,55 +161,81 @@ function,render_json,def render_json(checks: Sequence[Check]) -> str,191-192
 > src-tier-tokens.py
 > src-tier-ui.py
 @src-tier-installer.py src/tier/installer.py
-? Interactive/non-interactive MCP installer with safe config merging.; symbols: ClientSpec, Change, client_specs, spec_by_id, parse_clients, default_clients, server_entry, markers_balanced
+? Interactive/non-interactive MCP installer with safe config merging. Supports every major AI coding agent out of the box: JSON...; symbols: ClientSpec, Change, client_specs, spec_by_id, parse_clients, default_clients, detect_clients...
 = file
   path src/tier/installer.py
   language python
-  lines 678
-  sha256 f7aae42c2e4e2516
-  mtime 1794549335711224830
-  size 26014
-|symbols[40]{kind,name,signature,lines}
-class,ClientSpec,class ClientSpec,23-35
-class,Change,class Change,38-43
-function,_home,def _home(home: Optional[str]) -> str,62-63
-function,_desktop_path,"def _desktop_path(home: str, env: dict, platform: str) -> str",66-72
-function,_load_json_soft,def _load_json_soft(path: str),75-84
-function,client_specs,"def client_specs(root: str, home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None) -> List[ClientSpec]",87-131
-function,spec_by_id,"def spec_by_id(specs: Sequence[ClientSpec], client_id: str) -> Optional[ClientSpec]",134-138
-function,parse_clients,"def parse_clients(value: Optional[str], specs: Sequence[ClientSpec]) -> List[str]",141-161
-function,default_clients,def default_clients(specs: Sequence[ClientSpec]) -> List[str],164-168
-function,server_entry,"def server_entry(root: str, client_id: str='', find_executable=None) -> dict",171-183
-function,_json_text,def _json_text(data: dict) -> str,186-187
-function,_unified,"def _unified(path: str, before: str, after: str) -> str",190-193
-function,_backup,def _backup(path: str) -> str,196-203
-function,_save_text,"def _save_text(path: str, after: str, dry_run: bool, changes: List[Change], backup: bool=True) -> None",206-217
-function,_save_json,"def _save_json(path: str, data: dict, dry_run: bool, changes: List[Change]) -> None",220-221
-function,_merge_server,"def _merge_server(spec: ClientSpec, root: str, dry_run: bool, changes: List[Change], find_executable=None) -> None",224-233
-function,_command_tokens,def _command_tokens(cmd: str) -> List[str],236-246
-function,_is_tier_hook,def _is_tier_hook(cmd) -> bool,249-266
-function,_quote_command,def _quote_command(parts: List[str]) -> str,269-273
-function,_hook_command,def _hook_command(find_executable=None) -> str,276-282
-function,_filter_hooks,"def _filter_hooks(post: list, desired: str, uninstall: bool=False)",285-307
-function,_merge_hook,"def _merge_hook(path: str, dry_run: bool, changes: List[Change], find_executable=None) -> None",310-328
-function,_remove_hook,"def _remove_hook(path: str, dry_run: bool, changes: List[Change]) -> None",331-343
-function,_marker_span,def _marker_span(existing: str),346-359
-function,markers_balanced,def markers_balanced(text: str) -> bool,362-383
-function,_marked_text,"def _marked_text(existing: str, block: str) -> str",386-395
-function,_generic_instructions,def _generic_instructions() -> str,398-404
-function,_write_instructions,"def _write_instructions(path: str, block: str, dry_run: bool, changes: List[Change], warnings: List[str]=None) -> None",407-416
-function,_remove_instructions,"def _remove_instructions(path: str, dry_run: bool, changes: List[Change], warnings: List[str]=None) -> None",419-439
-function,_instruction_paths,"def _instruction_paths(specs: Sequence[ClientSpec], selected: Sequence[str], mode: str) -> List[str]",442-458
-function,_repo_stats,"def _repo_stats(root: str, doc: Doc) -> dict",461-468
-function,_generate_repo,"def _generate_repo(root: str, dry_run: bool, changes: List[Change]) -> dict",471-491
-function,_ask,"def _ask(ask: Optional[Callable[[str], str]], prompt: str, default: str) -> str",494-498
-function,_ask_bool,"def _ask_bool(ask, prompt: str, default: bool) -> bool",501-503
-function,_ask_instructions,"def _ask_instructions(ask, default: str='both') -> str",506-508
-function,_interactive_clients,"def _interactive_clients(specs: Sequence[ClientSpec], selected: Sequence[str], ask, ui: UI) -> List[str]",511-538
-function,_summary,"def _summary(ui: UI, result: dict) -> None",541-575
-function,install,"def install(target: str='.', clients=None, *, yes: bool=False, dry_run: bool=False, uninstall: bool=False, repo: bool=True, hook: bool=True, instructions: str='both', interactive: Optional[bool]=None, home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, ask=None, ui: Optional[UI]=None, find_executable=None) -> dict",578-644
-function,_uninstall,"def _uninstall(root: str, specs: Sequence[ClientSpec], selected: Sequence[str], dry_run: bool, ui: UI) -> dict",647-673
-function,setup,"def setup(*args, **kwargs) -> dict",676-678
+  lines 1465
+  sha256 aa7810fb51bc997a
+  mtime 1794555745680950943
+  size 58442
+|symbols[66]{kind,name,signature,lines}
+class,ClientSpec,class ClientSpec,63-78
+class,Change,class Change,81-86
+function,_home,def _home(home: Optional[str]) -> str,133-134
+function,_desktop_path,"def _desktop_path(home: str, env: dict, platform: str) -> str",137-143
+function,_load_json_soft,def _load_json_soft(path: str),146-155
+function,_catalog,"def _catalog(root: str, home: str, env: dict, platform: str) -> List[ClientSpec]",162-302
+function,_detected,"def _detected(spec: ClientSpec, find_executable) -> bool",305-312
+function,_json_entry,"def _json_entry(spec: ClientSpec, data: dict) -> Optional[dict]",315-327
+function,client_specs,"def client_specs(root: str, home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, find_executable=None) -> List[ClientSpec]",330-356
+function,spec_by_id,"def spec_by_id(specs: Sequence[ClientSpec], client_id: str) -> Optional[ClientSpec]",359-363
+function,parse_clients,"def parse_clients(value: Optional[str], specs: Sequence[ClientSpec]) -> List[str]",366-391
+function,default_clients,def default_clients(specs: Sequence[ClientSpec]) -> List[str],394-398
+function,detect_clients,def detect_clients(specs: Sequence[ClientSpec]) -> List[str],401-402
+function,command_argv,"def command_argv(root: str, find_executable=None) -> List[str]",409-418
+function,server_entry,"def server_entry(root: str, client_id: str='', find_executable=None, schema: Optional[str]=None) -> dict",421-434
+function,_json_text,def _json_text(data: dict) -> str,441-442
+function,_unified,"def _unified(path: str, before: str, after: str) -> str",445-448
+function,_backup,def _backup(path: str) -> str,451-458
+function,_save_text,"def _save_text(path: str, after: str, dry_run: bool, changes: List[Change], backup: bool=True) -> None",461-472
+function,_delete_file,"def _delete_file(path: str, dry_run: bool, changes: List[Change]) -> None",475-484
+function,_save_json,"def _save_json(path: str, data: dict, dry_run: bool, changes: List[Change]) -> None",487-488
+function,_merge_json_schema,"def _merge_json_schema(spec: ClientSpec, root: str, dry_run: bool, changes: List[Change], find_executable=None) -> None",491-504
+function,_toml_string,def _toml_string(value: str) -> str,513-514
+function,_toml_array,def _toml_array(values: Sequence[str]) -> str,517-518
+function,_toml_blocks,def _toml_blocks(text: str),521-532
+function,_is_tier_toml_header,def _is_tier_toml_header(header: str) -> bool,535-536
+function,_parse_toml_value,def _parse_toml_value(raw: str),539-576
+function,_parse_own_toml_block,"def _parse_own_toml_block(text: str, header: str='mcp_servers.tier') -> Optional[dict]",579-591
+function,_merge_toml,"def _merge_toml(path: str, entry: dict, dry_run: bool, changes: List[Change]) -> None",594-619
+function,_remove_toml,"def _remove_toml(path: str, dry_run: bool, changes: List[Change]) -> None",622-637
+function,_yaml_string,def _yaml_string(value: str) -> str,642-650
+function,continue_yaml,"def continue_yaml(entry: dict, name: str='tier') -> str",653-665
+function,_parse_continue_yaml,def _parse_continue_yaml(text: str) -> Optional[dict],668-688
+function,skill_markdown,"def skill_markdown(root: str, find_executable=None) -> str",693-752
+function,probe_entry,def probe_entry(spec: ClientSpec) -> dict,759-823
+function,_merge_server,"def _merge_server(spec: ClientSpec, root: str, dry_run: bool, changes: List[Change], find_executable=None) -> None",830-845
+function,_remove_server,"def _remove_server(spec: ClientSpec, dry_run: bool, changes: List[Change]) -> None",848-871
+function,_command_tokens,def _command_tokens(cmd: str) -> List[str],874-884
+function,_is_tier_hook,def _is_tier_hook(cmd) -> bool,887-904
+function,_quote_command,def _quote_command(parts: List[str]) -> str,907-911
+function,_hook_command,def _hook_command(find_executable=None) -> str,914-920
+function,_filter_hooks,"def _filter_hooks(post: list, desired: str, uninstall: bool=False)",923-945
+function,_merge_hook,"def _merge_hook(path: str, dry_run: bool, changes: List[Change], find_executable=None) -> None",948-966
+function,_remove_hook,"def _remove_hook(path: str, dry_run: bool, changes: List[Change]) -> None",969-981
+function,_marker_span,def _marker_span(existing: str),988-1001
+function,markers_balanced,def markers_balanced(text: str) -> bool,1004-1025
+function,_marked_text,"def _marked_text(existing: str, block: str) -> str",1028-1037
+function,_generic_instructions,def _generic_instructions() -> str,1040-1046
+function,_write_instructions,"def _write_instructions(path: str, block: str, dry_run: bool, changes: List[Change], warnings: List[str]=None) -> None",1049-1058
+function,_remove_instructions,"def _remove_instructions(path: str, dry_run: bool, changes: List[Change], warnings: List[str]=None) -> None",1061-1081
+function,_instruction_paths,"def _instruction_paths(specs: Sequence[ClientSpec], selected: Sequence[str], mode: str) -> List[str]",1084-1102
+function,_repo_stats,"def _repo_stats(root: str, doc: Doc) -> dict",1109-1116
+function,_generate_repo,"def _generate_repo(root: str, dry_run: bool, changes: List[Change]) -> dict",1119-1139
+function,_ask,"def _ask(ask: Optional[Callable[[str], str]], prompt: str, default: str) -> str",1142-1146
+function,_ask_bool,"def _ask_bool(ask, prompt: str, default: bool) -> bool",1149-1151
+function,_ask_instructions,"def _ask_instructions(ask, default: str='both') -> str",1154-1156
+function,_state_label,def _state_label(spec: ClientSpec) -> str,1159-1165
+function,_interactive_clients,"def _interactive_clients(specs: Sequence[ClientSpec], selected: Sequence[str], ask, ui: UI, root: str='.') -> Tuple[List[str], Optional[ClientSpec]]",1168-1216
+function,infer_schema,def infer_schema(path: str) -> str,1219-1231
+function,make_custom_spec,"def make_custom_spec(path: str, schema: str, root: str='.', label: str='') -> ClientSpec",1234-1249
+function,_summary,"def _summary(ui: UI, result: dict) -> None",1252-1288
+function,config_snippets,"def config_snippets(root: str='.', find_executable=None) -> List[Tuple[str, str]]",1295-1336
+function,render_snippets,"def render_snippets(root: str='.', find_executable=None) -> str",1339-1343
+function,install,"def install(target: str='.', clients=None, *, yes: bool=False, dry_run: bool=False, uninstall: bool=False, repo: bool=True, hook: bool=True, instructions: str='both', interactive: Optional[bool]=None, home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, ask=None, ui: Optional[UI]=None, find_executable=None, custom_config: Optional[str]=None, schema: Optional[str]=None, print_config: bool=False) -> dict",1350-1438
+function,_uninstall,"def _uninstall(root: str, specs: Sequence[ClientSpec], selected: Sequence[str], dry_run: bool, ui: UI) -> dict",1441-1460
+function,setup,"def setup(*args, **kwargs) -> dict",1463-1465
 > src-tier-models.py
 > src-tier-parser.py
 > src-tier-plugin.py
@@ -560,43 +586,58 @@ function,main,def main(),450-480
 > src-tier-retrieval.py
 > src-tier-tokens.py
 @tests-test_installer.py tests/test_installer.py
-? tests/test_installer.py (python module); symbols: InstallerTests, DoctorTests, SDKAdapterTests; methods: 20
+? tests/test_installer.py (python module); symbols: InstallerTests, MultiAgentTests, DoctorTests, SDKAdapterTests
 = file
   path tests/test_installer.py
   language python
-  lines 484
-  sha256 af27893fbf2f40a3
-  mtime 1794549412710783124
-  size 24366
-|symbols[28]{kind,name,signature,lines}
+  lines 794
+  sha256 f1a90f40f118473e
+  mtime 1794555681205935073
+  size 42263
+|symbols[43]{kind,name,signature,lines}
 function,_ui,def _ui(),22-23
 function,_put,"def _put(root, name, text)",26-31
 function,_read,def _read(path),34-36
 function,_which,def _which(name),39-46
 function,_snapshot,def _snapshot(root),49-57
-class,InstallerTests,class InstallerTests(unittest.TestCase),60-337
-method,InstallerTests.test_client_paths_linux_macos_windows,def test_client_paths_linux_macos_windows(self),61-88
-method,InstallerTests.test_detection_and_invalid_config,def test_detection_and_invalid_config(self),90-102
-method,InstallerTests.test_server_entry_absolute_and_vscode_type,def test_server_entry_absolute_and_vscode_type(self),104-112
-method,InstallerTests.test_install_merges_preserves_backs_up_and_summarizes,def test_install_merges_preserves_backs_up_and_summarizes(self),114-160
-method,InstallerTests.test_install_is_idempotent,def test_install_is_idempotent(self),162-175
-method,InstallerTests.test_dry_run_makes_no_mutations,def test_dry_run_makes_no_mutations(self),177-191
-method,InstallerTests.test_uninstall_removes_only_tier,def test_uninstall_removes_only_tier(self),193-214
-method,InstallerTests.test_no_repo_no_hook_no_instructions,def test_no_repo_no_hook_no_instructions(self),216-225
-method,InstallerTests.test_unbalanced_markers_backup_and_preserve_user_content,def test_unbalanced_markers_backup_and_preserve_user_content(self),227-265
-method,InstallerTests.test_orphan_end_marker_is_preserved,def test_orphan_end_marker_is_preserved(self),267-287
-method,InstallerTests.test_balanced_markers_replace_in_place,def test_balanced_markers_replace_in_place(self),289-307
-method,InstallerTests.test_setup_alias_cli,def test_setup_alias_cli(self),309-319
-method,InstallerTests.test_interactive_selection_and_yes_default,def test_interactive_selection_and_yes_default(self),321-337
-class,DoctorTests,class DoctorTests(unittest.TestCase),340-395
-method,DoctorTests._healthy,"def _healthy(self, root, home)",341-351
-method,DoctorTests.test_doctor_healthy_and_json,def test_doctor_healthy_and_json(self),353-364
-method,DoctorTests.test_doctor_cli,def test_doctor_cli(self),366-376
-method,DoctorTests.test_doctor_broken_config_and_stale_repo,def test_doctor_broken_config_and_stale_repo(self),378-395
-class,SDKAdapterTests,class SDKAdapterTests(unittest.TestCase),398-480
-method,SDKAdapterTests.test_v2_and_v1_loader_fallbacks,def test_v2_and_v1_loader_fallbacks(self),399-430
-method,SDKAdapterTests.test_missing_sdk_message,def test_missing_sdk_message(self),432-440
-method,SDKAdapterTests.test_all_eleven_tools_register_and_call,def test_all_eleven_tools_register_and_call(self),442-480
+class,InstallerTests,class InstallerTests(unittest.TestCase),60-343
+method,InstallerTests.test_client_paths_linux_macos_windows,def test_client_paths_linux_macos_windows(self),61-91
+method,InstallerTests.test_detection_and_invalid_config,def test_detection_and_invalid_config(self),93-105
+method,InstallerTests.test_server_entry_absolute_and_vscode_type,def test_server_entry_absolute_and_vscode_type(self),107-115
+method,InstallerTests.test_install_merges_preserves_backs_up_and_summarizes,def test_install_merges_preserves_backs_up_and_summarizes(self),117-163
+method,InstallerTests.test_install_is_idempotent,def test_install_is_idempotent(self),165-178
+method,InstallerTests.test_dry_run_makes_no_mutations,def test_dry_run_makes_no_mutations(self),180-194
+method,InstallerTests.test_uninstall_removes_only_tier,def test_uninstall_removes_only_tier(self),196-217
+method,InstallerTests.test_no_repo_no_hook_no_instructions,def test_no_repo_no_hook_no_instructions(self),219-228
+method,InstallerTests.test_unbalanced_markers_backup_and_preserve_user_content,def test_unbalanced_markers_backup_and_preserve_user_content(self),230-268
+method,InstallerTests.test_orphan_end_marker_is_preserved,def test_orphan_end_marker_is_preserved(self),270-290
+method,InstallerTests.test_balanced_markers_replace_in_place,def test_balanced_markers_replace_in_place(self),292-310
+method,InstallerTests.test_setup_alias_cli,def test_setup_alias_cli(self),312-322
+method,InstallerTests.test_interactive_selection_and_yes_default,def test_interactive_selection_and_yes_default(self),324-343
+class,MultiAgentTests,class MultiAgentTests(unittest.TestCase),346-647
+method,MultiAgentTests.test_catalog_covers_all_documented_clients,def test_catalog_covers_all_documented_clients(self),349-359
+method,MultiAgentTests.test_exact_paths_and_schemas,def test_exact_paths_and_schemas(self),361-390
+method,MultiAgentTests.test_open_code_uses_mcp_key_and_command_list,def test_open_code_uses_mcp_key_and_command_list(self),392-418
+method,MultiAgentTests.test_codex_toml_preserves_other_tables_and_uninstalls_cleanly,def test_codex_toml_preserves_other_tables_and_uninstalls_cleanly(self),420-456
+method,MultiAgentTests.test_zed_context_servers_shape,def test_zed_context_servers_shape(self),458-480
+method,MultiAgentTests.test_continue_yaml_written_and_removed,def test_continue_yaml_written_and_removed(self),482-500
+method,MultiAgentTests.test_skill_md_has_frontmatter_and_tool_docs,def test_skill_md_has_frontmatter_and_tool_docs(self),502-519
+method,MultiAgentTests.test_gemini_writes_settings_and_gemini_md,def test_gemini_writes_settings_and_gemini_md(self),521-532
+method,MultiAgentTests.test_every_json_client_installs_and_uninstalls,def test_every_json_client_installs_and_uninstalls(self),534-559
+method,MultiAgentTests.test_custom_config_json_toml_yaml_and_skill,def test_custom_config_json_toml_yaml_and_skill(self),561-586
+method,MultiAgentTests.test_custom_config_schema_inference_and_validation,def test_custom_config_schema_inference_and_validation(self),588-595
+method,MultiAgentTests.test_detected_selection_shortcut,def test_detected_selection_shortcut(self),597-612
+method,MultiAgentTests.test_print_config_covers_every_schema,def test_print_config_covers_every_schema(self),614-620
+method,MultiAgentTests.test_cli_custom_config_and_snippet_commands,def test_cli_custom_config_and_snippet_commands(self),622-647
+class,DoctorTests,class DoctorTests(unittest.TestCase),650-705
+method,DoctorTests._healthy,"def _healthy(self, root, home)",651-661
+method,DoctorTests.test_doctor_healthy_and_json,def test_doctor_healthy_and_json(self),663-674
+method,DoctorTests.test_doctor_cli,def test_doctor_cli(self),676-686
+method,DoctorTests.test_doctor_broken_config_and_stale_repo,def test_doctor_broken_config_and_stale_repo(self),688-705
+class,SDKAdapterTests,class SDKAdapterTests(unittest.TestCase),708-790
+method,SDKAdapterTests.test_v2_and_v1_loader_fallbacks,def test_v2_and_v1_loader_fallbacks(self),709-740
+method,SDKAdapterTests.test_missing_sdk_message,def test_missing_sdk_message(self),742-750
+method,SDKAdapterTests.test_all_eleven_tools_register_and_call,def test_all_eleven_tools_register_and_call(self),752-790
 > src-tier-__init__.py
 > src-tier-cli.py
 > src-tier-doctor.py

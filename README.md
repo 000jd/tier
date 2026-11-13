@@ -77,17 +77,30 @@ tier-mcp --help         # usage + the 11 tools (needs no dependencies)
 
 ### Step 2 — Connect your AI assistant in 10 seconds
 
-Point TIER at your project root. The wizard detects your clients, previews a diff, backs up every file it touches, and merges rather than overwrites:
+Point TIER at your project root. The wizard lists every supported agent, marks the ones detected on your machine, previews a diff, backs up every file it touches, and merges rather than overwrites:
 
 ```sh
 cd /path/to/your/project
-tier install        # interactive: Claude Code, Claude Desktop, Cursor, VS Code, Windsurf
+tier install        # 25 clients: Claude, Command Code, OpenCode, Codex, Gemini, Cursor, Zed, …
 ```
+
+The selection prompt accepts numbers, or one of four shortcuts:
+
+| Input | Selects |
+|---|---|
+| `1,3,8` | Those rows |
+| `d` / `detected` | Every client detected on this machine (config dir or binary present) |
+| `a` / `all` | Every supported client |
+| `p` / `project` | All project-scoped clients (writes inside your repo) |
+| `c` / `custom` | Type any config path and pick a schema |
 
 For scripts and CI, skip the prompts:
 
 ```sh
 tier install . --clients claude-code,cursor,vscode --yes
+tier install . --clients detected --yes          # everything found on this machine
+tier install . --clients all --dry-run           # preview every client
+tier install . --custom-config my/harness.json --schema mcpServers --yes
 ```
 
 Then confirm everything is wired up correctly:
@@ -96,13 +109,23 @@ Then confirm everything is wired up correctly:
 tier doctor .
 ```
 
-`tier doctor` prints one row per check and exits nonzero only on a `FAIL`. The fixed rows cover the Python version, entrypoints, tokenizer backend, target root, `repo.tier` presence, repo lint, and repo sync freshness; detected client configs, TIER hooks, and the optional `mcp` extra add one row each. A healthy project reads `0 failed, 0 warnings` — a bare project with no clients configured has **9** rows, and each registered client or hook adds one.
+`tier doctor` validates each registered client **according to its own schema** — JSON `mcpServers`, VS Code `servers`, OpenCode `mcp`, Zed `context_servers`, Codex TOML, Continue YAML, and `SKILL.md` — and exits nonzero only on a `FAIL`. The fixed rows cover the Python version, entrypoints, tokenizer backend, target root, `repo.tier` presence, repo lint, and repo sync freshness; detected client configs, TIER hooks, and the optional `mcp` extra add one row each.
+
+Browse the catalog and copy config by hand when you need to:
+
+```sh
+tier clients                    # every client id, scope, schema, and config path
+tier clients --json             # same, machine-readable
+tier config-snippet             # ready-to-copy JSON/TOML/YAML/SKILL.md + native CLI one-liners
+tier install --print-config     # same snippets, via the installer
+```
 
 What the installer guarantees:
 
-- Every existing JSON config is backed up to `<file>.bak` before an atomic merge.
-- Unrelated servers, hooks, and keys are preserved. Re-running is idempotent.
-- `CLAUDE.md` / `AGENTS.md` are backed up too, and unbalanced `TIER:BEGIN`/`TIER:END` markers are never sliced through — user text is preserved and a warning is printed.
+- Every existing config is backed up to `<file>.bak` before an atomic merge — including TOML and YAML.
+- Unrelated servers, tables, hooks, and keys are preserved. Re-running is idempotent.
+- Uninstall removes **only** TIER: other `[mcp_servers.*]` tables, `mcpServers` entries, and OpenCode/Zed servers survive untouched. A Codex `config.toml` is restored byte-for-byte.
+- `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` use `TIER:BEGIN`/`TIER:END` markers; unbalanced markers are never sliced through, so your text is preserved and a warning is printed.
 - The server entry prefers an absolute `tier-mcp` executable and otherwise falls back to the absolute current interpreter with `-m tier.mcp`, so GUI hosts do not depend on shell `PATH`.
 
 Use `--dry-run` to print unified diffs without touching disk, and `--uninstall` to remove only TIER entries:
@@ -114,28 +137,125 @@ tier install . --no-repo --no-hook --instructions none
 ```
 
 <details>
-<summary><b>Per-Client Setup &amp; Manual JSON Configs (Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, MCP Inspector)</b></summary>
+<summary><b>Supported AI agents, exact config paths &amp; schemas (25 clients)</b></summary>
 
-Every client below can be configured automatically with `tier install . --clients <id> --yes`. Replace `/abs/path/to/project` with your project root (use a POSIX path such as `/c/Users/me/proj` or `C:\\Users\\me\\proj` as appropriate for the host).
+Every client below is configured automatically with `tier install . --clients <id> --yes`.
+Replace `/abs/path/to/project` with your project root.
 
-| Client id | Scope | Config file | Key |
-|---|---|---|---|
-| `claude-code` | project | `.mcp.json` | `mcpServers` |
-| `claude-code` | project | `.claude/settings.json` | `hooks.PostToolUse` (compression hook) |
-| `claude-code-user` | user | `~/.claude.json` | `mcpServers` |
-| `claude-desktop` | user | macOS `~/Library/Application Support/Claude/claude_desktop_config.json`<br>Linux `~/.config/Claude/claude_desktop_config.json`<br>Windows `%APPDATA%\Claude\claude_desktop_config.json` | `mcpServers` |
-| `cursor` | project | `.cursor/mcp.json` | `mcpServers` |
-| `cursor-global` | user | `~/.cursor/mcp.json` | `mcpServers` |
-| `vscode` | project | `.vscode/mcp.json` | `servers` (entry includes `"type": "stdio"`) |
-| `windsurf` | user | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` |
+| Client id | Display | Scope | Config file | Schema |
+|---|---|---|---|---|
+| `claude-code` | Claude Code | project | `.mcp.json` (+ `.claude/settings.json` hook, `CLAUDE.md`, `AGENTS.md`) | `mcpServers` |
+| `claude-code-user` | Claude Code | user | `~/.claude.json` (+ `~/.claude/settings.json`) | `mcpServers` |
+| `claude-desktop` | Claude Desktop | user | macOS `~/Library/Application Support/Claude/claude_desktop_config.json`<br>Linux `~/.config/Claude/claude_desktop_config.json`<br>Windows `%APPDATA%\Claude\claude_desktop_config.json` | `mcpServers` |
+| `command-code` | Command Code | project | `.commandcode/mcp.json` | `mcpServers` |
+| `command-code-user` | Command Code | user | `~/.commandcode/mcp.json` | `mcpServers` |
+| `opencode` | OpenCode | project | `opencode.json` | `mcp` + `type: local`, `command` **array** |
+| `opencode-user` | OpenCode | user | `~/.config/opencode/opencode.json` | `mcp` + `type: local` |
+| `codex` | OpenAI Codex CLI | project | `.codex/config.toml` | TOML `[mcp_servers.tier]` |
+| `codex-user` | OpenAI Codex CLI | user | `~/.codex/config.toml` | TOML `[mcp_servers.tier]` |
+| `gemini` | Gemini CLI | project | `.gemini/settings.json` (+ `GEMINI.md`) | `mcpServers` |
+| `gemini-user` | Gemini CLI | user | `~/.gemini/settings.json` | `mcpServers` |
+| `cursor` | Cursor | project | `.cursor/mcp.json` | `mcpServers` |
+| `cursor-user` | Cursor | user | `~/.cursor/mcp.json` | `mcpServers` |
+| `vscode` | VS Code Copilot | project | `.vscode/mcp.json` | `servers` + `type: stdio` |
+| `windsurf` | Windsurf | user | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` |
+| `roo` | Roo Code / Cline | project | `.roo/mcp.json` | `mcpServers` |
+| `trae` | Trae | project | `.trae/mcp.json` | `mcpServers` |
+| `junie` | JetBrains Junie | project | `.junie/mcp/mcp.json` | `mcpServers` |
+| `junie-user` | JetBrains Junie | user | `~/.junie/mcp/mcp.json` | `mcpServers` |
+| `kiro` | Kiro | project | `.kiro/settings/mcp.json` | `mcpServers` |
+| `warp` | Warp Terminal | user | `~/.warp/.mcp.json` | `mcpServers` |
+| `zed` | Zed Editor | user | `~/.config/zed/settings.json` | `context_servers` → `command.path` |
+| `continue` | Continue.dev | project | `.continue/mcpServers/tier.yaml` | YAML `mcpServers:` |
+| `skills` | Agent Skills | project | `.agents/skills/tier/SKILL.md` | `SKILL.md` frontmatter |
+| `skills-user` | Agent Skills | user | `~/.agents/skills/tier/SKILL.md` | `SKILL.md` frontmatter |
+
+**Aliases** accepted by `--clients`: `claude`, `claude-user`, `commandcode`, `cmd`, `codex-cli`,
+`gemini-cli`, `cursor-global`, `vs-code`, `code`, `cline`, `roo-code`, `skill`, `opencode-global`.
+
+#### Schema examples
+
+Standard JSON — Claude Code, Command Code, Claude Desktop, Cursor, Gemini CLI, Windsurf, Roo, Trae, Junie, Kiro, Warp:
+
+```json
+{ "mcpServers": { "tier": { "command": "/abs/bin/tier-mcp", "args": ["/abs/path/to/project"] } } }
+```
+
+VS Code (`.vscode/mcp.json`) uses `servers` and an explicit stdio type:
+
+```json
+{ "servers": { "tier": { "type": "stdio", "command": "/abs/bin/tier-mcp", "args": ["/abs/path/to/project"] } } }
+```
+
+OpenCode (`opencode.json`) keeps your `$schema`, `model`, and other keys; the command is a single array:
+
+```json
+{
+  "$schema": "https://opencode.ai/schema.json",
+  "mcp": {
+    "tier": { "type": "local", "command": ["/abs/bin/tier-mcp", "/abs/path/to/project"], "enabled": true }
+  }
+}
+```
+
+Zed (`~/.config/zed/settings.json`) nests command and args:
+
+```json
+{ "context_servers": { "tier": { "command": { "path": "/abs/bin/tier-mcp", "args": ["/abs/path/to/project"] }, "settings": {} } } }
+```
+
+Codex CLI (`.codex/config.toml`) — other tables such as `[features]` and `[mcp_servers.*]` are preserved:
+
+```toml
+[mcp_servers.tier]
+command = "/abs/bin/tier-mcp"
+args = ["/abs/path/to/project"]
+```
+
+Continue.dev (`.continue/mcpServers/tier.yaml`):
+
+```yaml
+name: tier
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: tier
+    command: "/abs/bin/tier-mcp"
+    args:
+      - /abs/path/to/project
+```
+
+Agent Skills (`.agents/skills/tier/SKILL.md`) — a full skill with frontmatter that teaches both the
+MCP tools and the CLI:
+
+```markdown
+---
+name: tier
+description: Navigate this repository with TIER's 4-layer index instead of reading whole files.
+---
+# TIER — layered context for this repository
+… tier index / tier find / tier slice / tier impact tables, MCP tool reference, working rules …
+```
+
+#### Native CLI one-liners
+
+`tier config-snippet` prints these with your real paths filled in:
+
+```sh
+claude mcp add tier -- /abs/bin/tier-mcp /abs/path/to/project
+cmd mcp add tier -- /abs/bin/tier-mcp /abs/path/to/project
+opencode mcp add tier -- /abs/bin/tier-mcp /abs/path/to/project
+codex mcp add tier -- /abs/bin/tier-mcp /abs/path/to/project
+gemini mcp add tier /abs/bin/tier-mcp /abs/path/to/project
+tier-mcp /abs/path/to/project          # any generic stdio client
+```
 
 #### Claude Code
 
 ```sh
-# Let TIER write both .mcp.json and the PostToolUse hook:
 tier install . --clients claude-code --yes
 
-# Or register the server yourself with the Claude Code CLI:
+# or register the server yourself
 claude mcp add tier -- tier-mcp /abs/path/to/project
 claude mcp add --scope project tier -- tier-mcp /abs/path/to/project   # shared via .mcp.json
 claude mcp list
@@ -173,60 +293,6 @@ claude mcp list
 
 If you would rather not install the hook, pass `--no-hook`.
 
-#### Claude Desktop
-
-```sh
-tier install . --clients claude-desktop --yes
-```
-
-Uses the same `mcpServers` shape as above in the platform path from the table. Restart Claude Desktop after the change.
-
-#### Cursor
-
-```sh
-tier install . --clients cursor --yes          # project: .cursor/mcp.json
-tier install . --clients cursor-global --yes   # user:    ~/.cursor/mcp.json
-```
-
-```json
-{
-  "mcpServers": {
-    "tier": {
-      "command": "/usr/local/bin/tier-mcp",
-      "args": ["/abs/path/to/project"]
-    }
-  }
-}
-```
-
-#### VS Code (Copilot MCP)
-
-```sh
-tier install . --clients vscode --yes
-```
-
-VS Code uses the `servers` key and an explicit stdio type:
-
-```json
-{
-  "servers": {
-    "tier": {
-      "command": "/usr/local/bin/tier-mcp",
-      "args": ["/abs/path/to/project"],
-      "type": "stdio"
-    }
-  }
-}
-```
-
-#### Windsurf
-
-```sh
-tier install . --clients windsurf --yes
-```
-
-Writes `mcpServers` into `~/.codeium/windsurf/mcp_config.json`.
-
 #### MCP Inspector (browser, interactive testing)
 
 The Inspector needs the `[mcp]` extra, because it drives the official-SDK adapter:
@@ -247,7 +313,8 @@ npx @modelcontextprotocol/inspector tier-mcp /abs/path/to/project
 
 Each server exposes the same 11 tools: `tier_list`, `tier_index`, `tier_find`, `tier_get`, `tier_slice`, `tier_impact`, `tier_sync`, `tier_lint`, `tier_ingest`, `tier_repo`, `tier_remember`.
 
-> **Windows note.** Prefer the absolute `tier-mcp` path that `tier install` writes. If you point a GUI host at `python`, use the full interpreter path so it does not depend on `PATH` inherited from a shell profile.
+> **Windows note.** Prefer the absolute `tier-mcp` path that `tier install` writes. Quoted
+> executable paths are handled on every platform, and hook commands use `list2cmdline` on Windows.
 
 </details>
 
@@ -403,7 +470,7 @@ Dependencies: @src-tier-models.py
 | **Collision-Free Untrusted Guards** | `wrap_untrusted` picks a guard that cannot be forged in the payload; `<<<source #g1 ... >>>g1` keeps external text opaque. |
 | **Stateful Write-Back Memory** | `tier_remember` persists verified rules, decisions, keys, and references with atomic, lint-checked writes and configurable size bounds. |
 | **Stream & Hook Compression** | `tier pipe` and `tier hook` collapse noisy logs, JSON, and tool output; the hook enforces its token budget exactly, and malformed or binary input is handled safely. |
-| **Safe Interactive Installer** | `tier install` detects five host families, backs up configs, previews diffs, and uninstalls only TIER entries. `tier doctor` verifies the result. |
+| **Universal Agent Installer** | `tier install` configures **25 clients** across JSON, TOML, YAML, and `SKILL.md` schemas, backs up every file, previews diffs, and uninstalls only TIER entries. `tier doctor` validates each one in its native schema. |
 
 ## Verified Benchmarks
 
@@ -460,7 +527,9 @@ Without the extra, `tier-mcp-sdk` prints the exact `pip install "tier-ctx[mcp]"`
 
 | Command | Purpose |
 |---|---|
-| `tier install`, `tier setup` | Interactive/non-interactive MCP client installer |
+| `tier install`, `tier setup` | Universal installer for 25 MCP/agent clients; `--clients`, `--custom-config`, `--schema`, `--print-config` |
+| `tier clients` | List every supported client id, scope, schema, and config path (`--json` for machines) |
+| `tier config-snippet` | Print ready-to-copy JSON/TOML/YAML/`SKILL.md` snippets and native CLI one-liners |
 | `tier doctor` | Environment, config, repo, and sync diagnostics |
 | `tier index FILE` | L0 + L1 index with token and rule counts |
 | `tier find FILE QUERY` | Hybrid identifier/synonym/trigram search |

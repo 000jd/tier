@@ -19,6 +19,10 @@ from .tokens import count_tokens
 from .ui import default_ui
 
 
+SCHEMAS = ("mcpServers", "servers", "opencode", "context_servers",
+           "codex-toml", "continue-yaml", "skill-md")
+
+
 def _stdin_text() -> str:
     stream = getattr(sys.stdin, "buffer", None)
     if stream is not None:
@@ -90,17 +94,30 @@ def main(argv=None):
     p.add_argument("--write-instructions", choices=["claude", "agents", "both"])
     p.add_argument("--hook", action="store_true", help="add a PostToolUse compression hook")
     p = sub.add_parser("install", aliases=["setup"],
-                       help="interactive MCP/agent installer for supported clients")
+                       help="universal MCP/agent installer for 25 supported clients")
     p.add_argument("target", nargs="?", default=".")
-    p.add_argument("--clients", help="comma-separated client ids, or all/none")
+    p.add_argument("--clients", help="comma-separated client ids, or all/none/detected")
     p.add_argument("-y", "--yes", action="store_true", help="accept defaults; never prompt")
     p.add_argument("--dry-run", action="store_true", help="preview changes without writing")
     p.add_argument("--uninstall", action="store_true", help="remove TIER entries only")
     p.add_argument("--no-repo", action="store_true", help="skip repo.tier generation/sync")
     p.add_argument("--no-hook", action="store_true", help="skip the Claude Code PostToolUse hook")
-    p.add_argument("--instructions", choices=["both", "claude", "agents", "none"], default="both")
+    p.add_argument("--instructions",
+                   choices=["both", "claude", "agents", "gemini", "none"], default="both")
+    p.add_argument("--custom-config", metavar="PATH",
+                   help="install into any custom config path (.json/.toml/.yaml/.md)")
+    p.add_argument("--schema", choices=list(SCHEMAS),
+                   help="schema for --custom-config (inferred from the file name by default)")
+    p.add_argument("--print-config", action="store_true",
+                   help="print ready-to-copy config snippets for every client schema")
     p.add_argument("--plain", action="store_true", help="disable rich/ANSI styling")
     p.add_argument("--no-color", action="store_true")
+    p = sub.add_parser("config-snippet",
+                       help="print ready-to-copy MCP config snippets for every client schema")
+    p.add_argument("target", nargs="?", default=".")
+    p = sub.add_parser("clients", help="list every supported client id and its config path")
+    p.add_argument("target", nargs="?", default=".")
+    p.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     p = sub.add_parser("doctor", help="check environment, configs, repo.tier, and sync health")
     p.add_argument("root", nargs="?", default=".")
     p.add_argument("--json", action="store_true")
@@ -147,10 +164,34 @@ def main(argv=None):
                 a.target, clients=a.clients, yes=a.yes, dry_run=a.dry_run,
                 uninstall=a.uninstall, repo=not a.no_repo, hook=not a.no_hook,
                 instructions=a.instructions, ui=ui,
+                custom_config=a.custom_config, schema=a.schema,
+                print_config=a.print_config,
             )
         except (OSError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
+        return 0
+
+    if a.cmd == "config-snippet":
+        from .installer import render_snippets
+
+        sys.stdout.write(render_snippets(a.target))
+        return 0
+
+    if a.cmd == "clients":
+        from .installer import client_specs
+
+        specs = client_specs(a.target)
+        if a.json:
+            print(json.dumps([
+                {"id": s.id, "label": s.label, "scope": s.scope,
+                 "schema": s.schema, "config_path": s.config_path}
+                for s in specs
+            ], indent=2))
+            return 0
+        width = max(len(s.id) for s in specs)
+        for s in specs:
+            print(f"{s.id:<{width}}  {s.scope:<8} {s.schema:<16} {s.config_path}")
         return 0
 
     if a.cmd == "doctor":

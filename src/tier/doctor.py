@@ -9,7 +9,9 @@ import sys
 from dataclasses import dataclass
 from typing import List, Optional, Sequence
 
-from .installer import ClientSpec, _is_tier_hook, _load_json_soft, client_specs
+from .installer import (
+    SCHEMA_SKILL, ClientSpec, _is_tier_hook, _load_json_soft, client_specs, probe_entry,
+)
 from .lint import lint
 from .parser import _load, is_repo_doc
 from .repo import sync_repo
@@ -25,19 +27,16 @@ class Check:
 
 
 def _check_entry(spec: ClientSpec, root: str, find_executable) -> Check:
-    data, error = _load_json_soft(spec.config_path)
-    if error:
-        return Check(f"client {spec.id}", "FAIL", f"{spec.config_path}: {error}")
-    servers = data.get(spec.config_key)
-    if servers is None:
+    """Validate one client's TIER entry, whatever schema it uses."""
+    probe = probe_entry(spec)
+    if probe.get("error"):
+        return Check(f"client {spec.id}", "FAIL", f"{spec.config_path}: {probe['error']}")
+    if not probe.get("present"):
         return Check(f"client {spec.id}", "INFO", "config present; TIER is not registered")
-    if not isinstance(servers, dict):
-        return Check(f"client {spec.id}", "FAIL",
-                     f"{spec.config_path}: '{spec.config_key}' is not an object")
-    entry = servers.get("tier")
-    if not isinstance(entry, dict):
-        return Check(f"client {spec.id}", "INFO", "config present; TIER is not registered")
+    if spec.schema == SCHEMA_SKILL:
+        return Check(f"client {spec.id}", "PASS", spec.config_path)
 
+    entry = probe.get("entry") or {}
     command = entry.get("command")
     args = entry.get("args", [])
     if not isinstance(command, str) or not command:
@@ -155,10 +154,19 @@ def run_doctor(root: str = ".", home: Optional[str] = None, env: Optional[dict] 
                     else:
                         checks.append(Check("repo sync", "PASS", "up to date"))
 
-    specs = client_specs(root, home=home, env=env, platform=platform)
+    specs = client_specs(root, home=home, env=env, platform=platform,
+                         find_executable=find_executable)
     existing = [s for s in specs if os.path.exists(s.config_path)]
     if not existing:
         checks.append(Check("clients", "INFO", "no supported client configs detected"))
+    else:
+        configured = [s.id for s in specs if s.configured]
+        checks.append(Check(
+            "clients",
+            "PASS" if configured else "INFO",
+            f"{len(existing)} config(s) found; TIER registered in "
+            + (", ".join(configured) if configured else "none"),
+        ))
     for spec in existing:
         checks.append(_check_entry(spec, root, find_executable))
     for spec in specs:

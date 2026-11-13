@@ -218,17 +218,35 @@ Small payloads return `{"continue": true}`. Malformed JSON is treated as a raw t
 4. Prints a compact instruction block containing the L0 repository index and routing rules for `tier_list`, `tier_index`, `tier_find`, `tier_get`, `tier_slice`, and `tier_remember`. With `--write-instructions claude|agents|both`, the block is merged into `CLAUDE.md` or `AGENTS.md` between stable `TIER:BEGIN` / `TIER:END` markers.
 5. With `--hook`, merges a `PostToolUse` compression command into `TARGET/.claude/settings.json`, preserving existing hooks and avoiding duplicates.
 
-## Interactive installer
+## Universal agent installer
 
-`tier install` (alias `tier setup`) is a cross-platform installer for Claude Code (project and user), Claude Desktop, Cursor (project and global), VS Code, and Windsurf. It detects existing config files, displays a numbered multi-select, and supports non-interactive `--clients`, `--yes`, `--dry-run`, and `--uninstall` modes. `--dry-run` prints unified diffs and never touches disk.
+`tier install` (alias `tier setup`) configures 25 AI coding agents across four config languages. Each client is described by a schema, so one install path covers all of them:
 
-Client config paths are platform-aware: Claude Desktop uses `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `~/.config/Claude/claude_desktop_config.json` on Linux, and `%APPDATA%\Claude\claude_desktop_config.json` on Windows. Claude Code project config is `.mcp.json` plus `.claude/settings.json`; the user config is `~/.claude.json` plus `~/.claude/settings.json`. Cursor uses `.cursor/mcp.json` or `~/.cursor/mcp.json`; VS Code uses `.vscode/mcp.json` with a `servers` key and `type: stdio`; Windsurf uses `~/.codeium/windsurf/mcp_config.json`.
+| Schema | Clients | Shape |
+|---|---|---|
+| `mcpServers` (JSON) | Claude Code (project/user), Claude Desktop, Command Code (project/user), Gemini CLI (project/user), Cursor (project/user), Windsurf, Roo Code, Trae, Junie (project/user), Kiro, Warp | `{"mcpServers": {"tier": {"command": ..., "args": [...]}}}` |
+| `servers` (JSON) | VS Code Copilot | `{"servers": {"tier": {"type": "stdio", "command": ..., "args": [...]}}}` |
+| `opencode` (JSON) | OpenCode (project/global) | `{"mcp": {"tier": {"type": "local", "command": [cmd, ...args], "enabled": true}}}` |
+| `context_servers` (JSON) | Zed | `{"context_servers": {"tier": {"command": {"path": ..., "args": [...]}}}}` |
+| `codex-toml` (TOML) | OpenAI Codex CLI (project/user) | `[mcp_servers.tier]` with `command` and `args` |
+| `continue-yaml` (YAML) | Continue.dev | standalone `.continue/mcpServers/tier.yaml` |
+| `skill-md` (Markdown) | Agent Skills (project/global) | `SKILL.md` with YAML frontmatter |
 
-The installer prefers an absolute `tier-mcp` executable and otherwise uses the absolute current interpreter with `-m tier.mcp`. Before modifying any existing JSON file it creates `<file>.bak` and writes atomically. Unrelated servers, keys, hooks, and instruction blocks are preserved; repeated installs are idempotent. `--uninstall` removes only the `tier` entry, TIER hook commands, and TIER instruction blocks. When `repo.tier` is generated or synced, the summary reports raw-source tokens, L0 tokens, and the measured percentage.
+Client config paths are platform-aware: Claude Desktop uses `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `~/.config/Claude/claude_desktop_config.json` on Linux, and `%APPDATA%\Claude\claude_desktop_config.json` on Windows. Claude Code project config is `.mcp.json` plus `.claude/settings.json`; the user config is `~/.claude.json` plus `~/.claude/settings.json`.
+
+**Selection.** The interactive menu prints every client with its scope, detection state, and config path. It accepts row numbers, `d`/`detected` (every client whose config directory or binary exists), `a`/`all`, `p`/`project` (project-scoped only), and `c`/`custom` (type any path plus a schema). The non-interactive equivalents are `--clients`, `--yes`, `--dry-run`, `--uninstall`, `--custom-config PATH`, and `--schema NAME`.
+
+**Merging.** JSON schemas merge into their container key and preserve every other key. The Codex TOML merger inserts or replaces only the `[mcp_servers.tier]` table and strips only that table on uninstall, restoring the file byte-for-byte; `[features]` and other `[mcp_servers.*]` tables are untouched. Continue gets a standalone YAML file that is deleted on uninstall, and `SKILL.md` is written whole and deleted on uninstall.
+
+## Config snippets and catalog
+
+**Snippets.** `tier config-snippet` (or `tier install --print-config`) prints ready-to-copy snippets for every schema plus native CLI one-liners for `claude`, `cmd`, `opencode`, `codex`, and `gemini`. `tier clients` lists the catalog, with `--json` for machines.
+
+The installer prefers an absolute `tier-mcp` executable and otherwise uses the absolute current interpreter with `-m tier.mcp`. Before modifying any existing config it creates `<file>.bak` and writes atomically. Unrelated servers, keys, hooks, and instruction blocks are preserved; repeated installs are idempotent. When Gemini CLI is selected, `GEMINI.md` receives the same `TIER:BEGIN`/`TIER:END` block as `CLAUDE.md` and `AGENTS.md`. `--uninstall` removes only the `tier` entry, TIER hook commands, and TIER instruction blocks. When `repo.tier` is generated or synced, the summary reports raw-source tokens, L0 tokens, and the measured percentage.
 
 ## Diagnostics
 
-`tier doctor [ROOT]` checks Python version, `tier`/`tier-mcp` entrypoints, optional Node/`gpt-tokenizer` availability, the target directory, `repo.tier` presence, lint errors, sync freshness, detected client configs (command and root validity), TIER hooks, and the optional `mcp` extra. It renders a PASS/WARN/FAIL table; `--json` emits machine-readable checks. The exit code is nonzero only when a check fails.
+`tier doctor [ROOT]` checks Python version, `tier`/`tier-mcp` entrypoints, optional Node/`gpt-tokenizer` availability, the target directory, `repo.tier` presence, lint errors, sync freshness, TIER hooks, and the optional `mcp` extra. Every detected client config is validated in its own schema — JSON `mcpServers`, VS Code `servers`, OpenCode `mcp`, Zed `context_servers`, Codex TOML, Continue YAML, and `SKILL.md` — checking the command, its existence, and that the registered root matches. It renders a PASS/WARN/FAIL table; `--json` emits machine-readable checks. The exit code is nonzero only when a check fails.
 
 ## Optional official SDK adapter
 
