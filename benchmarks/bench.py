@@ -169,6 +169,8 @@ def bench_records():
         ["format", "tokens", "vs JSON pretty"],
     )
     say("   * TOON-style = my re-implementation of the documented tabular syntax, not the official library.")
+    if yaml is None:
+        say("   * YAML = the built-in stdlib emitter; byte-identical to PyYAML on this fixture only.")
     say()
 
 

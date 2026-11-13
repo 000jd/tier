@@ -529,6 +529,23 @@ class T(unittest.TestCase):
             d = tier.from_repo(td)
             self.assertEqual(tier.find(d, "calculate invoice total", 1)[0][0], "service.py")
 
+    def test_mcp_help_and_version_flags(self):
+        env = dict(ENV)
+        for flag, expected in (("--help", "usage: tier-mcp"), ("--version", "tier-mcp " + tier.VERSION)):
+            proc = subprocess.run(
+                [sys.executable, "-m", "tier.mcp", flag],
+                input="", text=True, capture_output=True, timeout=30, cwd=ROOT, env=env,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn(expected, proc.stdout)
+            self.assertEqual(proc.stderr.strip(), "")
+        served = subprocess.run(
+            [sys.executable, "-m", "tier.mcp"],
+            input='{"jsonrpc":"2.0","id":1,"method":"ping"}\n',
+            text=True, capture_output=True, timeout=30, cwd=ROOT, env=env,
+        )
+        self.assertEqual(json.loads(served.stdout.splitlines()[0])["id"], 1)
+
     def test_mcp_tool_surface_and_repo(self):
         with tempfile.TemporaryDirectory() as td:
             self.put(td, "demo.py", "def demo():\n    return 1\n")
@@ -728,7 +745,8 @@ class T(unittest.TestCase):
 
     def test_pyproject_and_version_metadata(self):
         pyproject = self.read("pyproject.toml")
-        self.assertIn('version = "1.0.0"', pyproject)
+        self.assertIn('name = "tier-ctx"', pyproject)
+        self.assertIn('version = "1.0.1"', pyproject)
         self.assertIn('tier = "tier.cli:main"', pyproject)
         self.assertIn('tier-mcp = "tier.mcp.server:main"', pyproject)
         self.assertIn('tier-mcp-sdk = "tier.mcp.sdk_server:main"', pyproject)
@@ -736,13 +754,13 @@ class T(unittest.TestCase):
         self.assertIn('ui = ["rich>=13.0"]', pyproject)
         self.assertIn('mcp = ["mcp>=2.0"]', pyproject)
         self.assertIn("all = [", pyproject)
-        self.assertEqual(json.loads(self.read("benchmarks/package.json"))["version"], "1.0.0")
-        self.assertEqual(tier.VERSION, "1.0.0")
-        self.assertIn("# TIER v1.0.0", self.read("SPEC.md"))
-        self.assertIn("TIER v1.0.0", self.read("README.md"))
-        self.assertTrue(self.read("SPEC.tier").startswith("%tier 1.0.0"))
-        self.assertTrue(self.read("repo.tier").startswith("%tier 1.0.0"))
-        self.assertTrue(self.read("examples/payments-runbook.tier").startswith("%tier 1.0.0"))
+        self.assertEqual(json.loads(self.read("benchmarks/package.json"))["version"], "1.0.1")
+        self.assertEqual(tier.VERSION, "1.0.1")
+        self.assertIn("# TIER v1.0.1", self.read("SPEC.md"))
+        self.assertIn("TIER v1.0.1", self.read("README.md"))
+        self.assertTrue(self.read("SPEC.tier").startswith("%tier 1.0.1"))
+        self.assertTrue(self.read("repo.tier").startswith("%tier 1.0.1"))
+        self.assertTrue(self.read("examples/payments-runbook.tier").startswith("%tier 1.0.1"))
 
     def test_mcp_slice_and_impact(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1615,20 +1633,59 @@ class PerfAndSafety(unittest.TestCase):
         self.assertLessEqual(len(calls), 2)
         self.assertLessEqual(tier._tokens(out), 200)
 
-    def test_hook_uses_fast_estimator_by_default(self):
-        big = "\n".join(f"ERROR failed id={i}" for i in range(500))
-        calls = []
-        original = tier.count_tokens
+    def test_hook_without_exact_backend_stays_within_budget(self):
+        """The no-Node fallback must under-fill, never pass through over budget."""
+        from tier import tokens
 
-        def spy(strings, fast=None):
-            calls.append(fast)
-            return original(strings, fast=fast)
+        body = "\n".join(f"x{i}=f(a[{i}],b.c(d),e[1]);" for i in range(60))
+        original = tokens._EXACT
+        tokens._EXACT = False
+        try:
+            response = tier.hook_process(json.dumps({"tool_response": body}), max_tokens=600)
+        finally:
+            tokens._EXACT = original
+        context = response.get("hookSpecificOutput", {}).get("additionalContext", "")
+        self.assertLessEqual(tier.count_tokens([context])[0][0], 600)
+        self.assertIn("best-effort", response["systemMessage"])
 
-        with __import__("unittest").mock.patch.object(tier.pipe, "count_tokens", spy):
-            response = tier.hook_process(json.dumps({"tool_response": big}), max_tokens=100)
-        self.assertIn("hookSpecificOutput", response)
-        self.assertTrue(calls)
-        self.assertTrue(all(flag is True for flag in calls))
+    def test_hook_budget_is_exact_not_estimated(self):
+        """The hook must never pass through a payload that is over its budget.
+
+        A characters/4 estimate under-counts dense code by up to 2.34x, so an
+        estimator-gated decision hands the agent a payload far over the cap.
+        """
+        for n in (60, 64, 66, 70, 120):
+            body = "\n".join(f"x{i}=f(a[{i}],b.c(d),e[1]);" for i in range(n))
+            exact = tier.count_tokens([body])[0][0]
+            self.assertGreater(exact, 600)
+            response = tier.hook_process(
+                json.dumps({"hook_event_name": "PostToolUse", "tool_response": body}),
+                max_tokens=600,
+            )
+            context = response.get("hookSpecificOutput", {}).get("additionalContext", "")
+            self.assertTrue(context, f"n={n}: payload over budget was passed through raw")
+            self.assertLessEqual(tier.count_tokens([context])[0][0], 600, f"n={n}")
+
+    def test_hook_passes_through_only_when_provably_small(self):
+        tiny = "ok\n" * 10
+        self.assertTrue(tier.hook_process(json.dumps({"tool_response": tiny}),
+                                         max_tokens=600)["continue"])
+        self.assertTrue(tier.hook_process("", max_tokens=600)["continue"])
+
+    def test_hook_reports_counting_mode(self):
+        body = "\n".join(f"x{i}=f(a[{i}],b.c(d),e[1]);" for i in range(60))
+        response = tier.hook_process(json.dumps({"tool_response": body}), max_tokens=600)
+        message = response["systemMessage"]
+        self.assertIn("counts", message)
+        self.assertTrue("exact" in message or "estimated" in message)
+
+    def test_hook_fast_mode_is_biased_safe(self):
+        body = "\n".join(f"x{i}=f(a[{i}],b.c(d),e[1]);" for i in range(60))
+        response = tier.hook_process(json.dumps({"tool_response": body}),
+                                     max_tokens=600, exact=False)
+        context = response.get("hookSpecificOutput", {}).get("additionalContext", "")
+        if context:
+            self.assertLessEqual(tier.count_tokens([context])[0][0], 600)
 
     def test_malformed_table_row_count_capped_with_warning(self):
         d = tier.parse("@a A\n|t[999999]{x,y}\n1,2\n3,4\n@b B\nbody\n")
@@ -1651,6 +1708,66 @@ class PerfAndSafety(unittest.TestCase):
         d = tier.parse("@a A\n|t[" + "9" * 5000 + "]{x}\n1\n2\n")
         self.assertEqual([r[0] for r in tier.nodes(d.sections[0])[0]["rows"]], ["1", "2"])
         self.assertTrue(d.warnings)
+
+    def test_sync_detects_same_size_edit_with_restored_mtime(self):
+        with tempfile.TemporaryDirectory() as td:
+            _put(td, "mod.py", "def f():\n    return 1\n")
+            doc = tier.from_repo(td)
+            path = os.path.join(td, "repo.tier")
+            _put(td, "repo.tier", tier.dumps(doc))
+            src = os.path.join(td, "mod.py")
+            st = os.stat(src)
+            _put(td, "mod.py", "def h():\n    return 9\n")
+            os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns))
+
+            res = tier.sync_repo(path, root=td, rehash=True)
+            self.assertIn("mod.py", res["changed"])
+            names = {row[1] for node in tier.nodes(res["doc"].by_id()["mod.py"])
+                     if node["t"] == "table" for row in node["rows"]}
+            self.assertIn("h", names)
+            self.assertNotIn("f", names)
+            text, _ = tier.slice_symbols(res["doc"], "mod.py", ["h"], root=td)
+            self.assertIn("return 9", text)
+
+    def test_sync_rehash_flag_catches_what_stat_cache_misses(self):
+        with tempfile.TemporaryDirectory() as td:
+            _put(td, "mod.py", "def f():\n    return 1\n")
+            path = os.path.join(td, "repo.tier")
+            _put(td, "repo.tier", tier.dumps(tier.from_repo(td)))
+            src = os.path.join(td, "mod.py")
+            st = os.stat(src)
+            _put(td, "mod.py", "def g():\n    return 7\n")
+            os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns))
+            self.assertEqual(tier.sync_repo(path, root=td)["changed"], [])
+            self.assertIn("mod.py", tier.sync_repo(path, root=td, rehash=True)["changed"])
+
+    def test_sync_mtime_cache_heals_when_recorded_mtime_predates_map(self):
+        """A recorded mtime older than the map cannot be a valid fast-path hit."""
+        with tempfile.TemporaryDirectory() as td:
+            _put(td, "mod.py", "def f():\n    return 1\n")
+            src = os.path.join(td, "mod.py")
+            stale = os.stat(src).st_mtime_ns - 10 * 10**9
+            os.utime(src, ns=(stale, stale))
+            doc = tier.from_repo(td)
+            path = os.path.join(td, "repo.tier")
+            _put(td, "repo.tier", tier.dumps(doc))
+            # Backdate the map so the file's recorded mtime is newer than it.
+            future = stale - 10**9
+            os.utime(path, ns=(future, future))
+            st = os.stat(src)
+            _put(td, "mod.py", "def q():\n    return 5\n")
+            os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns))
+            res = tier.sync_repo(path, root=td)
+            self.assertIn("mod.py", res["changed"])
+
+    def test_sync_rehash_keeps_clean_tree_clean(self):
+        with tempfile.TemporaryDirectory() as td:
+            _put(td, "one.py", '"""One."""\n\ndef one():\n    return 1\n')
+            path = os.path.join(td, "repo.tier")
+            _put(td, "repo.tier", tier.dumps(tier.from_repo(td)))
+            res = tier.sync_repo(path, root=td, rehash=True)
+            self.assertEqual(res["changed"], [])
+            self.assertFalse(res["written"])
 
     def test_remember_bounds(self):
         with tempfile.TemporaryDirectory() as td:

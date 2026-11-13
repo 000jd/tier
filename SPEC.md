@@ -1,4 +1,4 @@
-# TIER v1.0.0
+# TIER v1.0.1
 
 TIER (Tiered Information for Efficient Retrieval) is a line-oriented text format plus a local context, memory, and code-navigation engine for AI agents. File extension: `.tier`. Encoding: UTF-8, LF line endings. The reference implementation is a Python 3.10+ package in a `src/` layout and uses the standard library only.
 
@@ -72,7 +72,7 @@ A key/value block ends at the first line that is not indented. All scalars are s
 ## Document shape
 
 ```
-%tier 1.0.0
+%tier 1.0.1
 %title Payments API Runbook
 %sum Deploying, operating, and debugging the payments API
 %rule Never log card numbers
@@ -160,7 +160,7 @@ def parse(text: str) -> Doc:
 - Changed and deleted section ids are evicted from the active `Session`, including all `section#symbol` L3 slice entries.
 - `%sum` is refreshed with the current file count, languages, and entrypoints.
 
-Before reading or hashing a source file, `sync` compares its current `mtime` and `size` with the recorded fingerprint; when both match, the file is not read at all. `tier.sync_repo()` returns changed, added, deleted, and unchanged lists. Writing is atomic and skipped when nothing changed. The MCP server auto-syncs a repository map before `tier_index`, `tier_find`, `tier_get`, and `tier_slice`, and exposes `tier_sync` explicitly; repeat reads within a short window reuse the last parsed doc when the recorded file and directory stats are unchanged.
+Before reading or hashing a source file, `sync` compares its current `mtime` and `size` with the recorded fingerprint; when both match — and the recorded `mtime` is not newer than `repo.tier` itself — the file is not read at all. That shortcut is a cache, never the source of truth: `tier sync --rehash` (MCP `tier_sync {rehash: true}`) ignores it and compares content hashes, which is required after `rsync -a`, `cp -p`, or a `tar` extraction that restores timestamps and can hide a same-size edit. The stored `sha256` remains authoritative. `tier.sync_repo()` returns changed, added, deleted, and unchanged lists. Writing is atomic and skipped when nothing changed. The MCP server auto-syncs a repository map before `tier_index`, `tier_find`, `tier_get`, and `tier_slice`, and exposes `tier_sync` explicitly; repeat reads within a short window reuse the last parsed doc when the recorded file and directory stats are unchanged.
 
 ## Impact analysis
 
@@ -206,7 +206,7 @@ The MCP `tier_ingest` tool accepts Markdown, JSON, logs, `max_tokens`, and `save
 {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "TIER compressed ..."}}
 ```
 
-Small payloads return `{"continue": true}`. Malformed JSON is treated as a raw tool-response string, so the hook never crashes; a short malformed payload simply continues. The hook scores candidates with the deterministic characters/4 estimator by default so every tool call stays fast; pass `exact=True` to `hook_process` when BPE counts are required.
+Small payloads return `{"continue": true}`. Malformed JSON is treated as a raw tool-response string, so the hook never crashes; a short malformed payload simply continues. The token budget is a contract, so the hook decides with exact counts: a payload is skipped only when it is provably within budget (it is no longer than the budget in characters, since a token is at least one character), otherwise the persistent tokenizer counts it exactly and the emitted context is verified before it is returned. A characters/4 estimate may only make the safe pass-through decision, scaled by the rigorous 4x bound; measured underestimation on dense JSON and minified code reaches 2.34x, so an estimator-gated decision would pass through payloads well over the cap. `hook_process(..., exact=False)` and `tier hook --fast` opt into estimator-only counting, which is best-effort and reports `estimated, best-effort` in `systemMessage`. The default path reports `exact counts`.
 
 ## Agent plugin bootstrap
 
@@ -232,11 +232,11 @@ The installer prefers an absolute `tier-mcp` executable and otherwise uses the a
 
 ## Optional official SDK adapter
 
-`pip install "tier[mcp]"` enables `tier-mcp-sdk` and `python -m tier.mcp.sdk_server`. The adapter wraps all 11 tools with the official SDK's v2 `MCPServer` (falling back to v1 `FastMCP`). It supports `--transport stdio`, `--transport streamable-http --host HOST --port PORT`, and `mcp dev` via the module-level `mcp`/`server` object. If the extra is missing, it prints the exact install command and exits nonzero without a traceback. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib implementation.
+`pip install "tier-ctx[mcp]"` enables `tier-mcp-sdk` and `python -m tier.mcp.sdk_server`. The adapter wraps all 11 tools with the official SDK's v2 `MCPServer` (falling back to v1 `FastMCP`). It supports `--transport stdio`, `--transport streamable-http --host HOST --port PORT`, and `mcp dev` via the module-level `mcp`/`server` object. If the extra is missing, it prints the exact install command and exits nonzero without a traceback. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib implementation.
 
 ## Packaging
 
-`pyproject.toml` declares the standard-library package at version `1.0.0` with no required third-party dependencies and three console scripts:
+`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.0.1` with no required third-party dependencies and three console scripts:
 
 | Command | Entry point |
 |---|---|
@@ -284,7 +284,7 @@ Run the stdio server with `tier-mcp /path/to/root` or `python -m tier.mcp /path/
 
 Paths are confined to the configured root. `tier_get` and `tier_slice` share a session cache; `tier_sync` and any auto-sync invalidate changed sections and L3 slice entries.
 
-With `tier[mcp]`, `tier-mcp-sdk` / `python -m tier.mcp.sdk_server` exposes the same 11 tools through the official SDK for MCP Inspector (`mcp dev`) and Streamable HTTP. The default server remains the stdlib JSON-RPC implementation.
+With `tier-ctx[mcp]`, `tier-mcp-sdk` / `python -m tier.mcp.sdk_server` exposes the same 11 tools through the official SDK for MCP Inspector (`mcp dev`) and Streamable HTTP. The default server remains the stdlib JSON-RPC implementation.
 
 ## Author guidelines
 
@@ -312,7 +312,7 @@ The reference converter maps headings to sections, Markdown tables to `|` tables
 
 ## Benchmarks
 
-See `benchmarks/BENCH.txt` for the full A-I output. TIER v1.0.0 measures:
+See `benchmarks/BENCH.txt` for the full A-I output. TIER v1.0.1 measures:
 
 - A/B: TIER tables match CSV at about 61 percent fewer tokens than pretty JSON. TIER key/value is 39 percent below pretty JSON and 13 percent below YAML; compact JSON is still smaller.
 - C: 8/8 `hit@1` on the payments runbook, 352-token L0 index, and L0 + top-1 + session dedup below full Markdown at all eight questions.
@@ -326,7 +326,7 @@ See `benchmarks/BENCH.txt` for the full A-I output. TIER v1.0.0 measures:
 
 ## Backward compatibility
 
-TIER v1.0.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.0.0`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable.
+TIER v1.0.1 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.0.1`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable.
 
 ## Non-goals
 

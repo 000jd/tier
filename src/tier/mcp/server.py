@@ -122,8 +122,20 @@ TOOLS = [
     {
         "name": "tier_sync",
         "description": "Incrementally refresh a repo.tier from disk: re-parse only changed or added files, "
-        "remove deleted modules, and invalidate changed sections and L3 slices in the session cache.",
-        "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+        "remove deleted modules, and invalidate changed sections and L3 slices in the session cache. "
+        "Set rehash=true to compare content hashes instead of trusting recorded mtime+size.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "rehash": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "ignore the mtime+size fast path and compare content hashes",
+                },
+            },
+            "required": ["path"],
+        },
     },
     {
         "name": "tier_lint",
@@ -351,7 +363,8 @@ def call(name: str, a: dict) -> str:
     if name == "tier_sync":
         path = safe(a["path"])
         res = sync_repo(
-            path, root=os.path.dirname(path), session=SESSION, session_key=path, write=True
+            path, root=os.path.dirname(path), session=SESSION, session_key=path, write=True,
+            rehash=bool(a.get("rehash")),
         )
         sig = _repo_signature(path, res["doc"])
         sig["root"] = os.path.dirname(path)
@@ -435,6 +448,20 @@ def handle(msg: dict):
 
 
 def main():
+    args = sys.argv[1:]
+    if any(a in ("-h", "--help") for a in args):
+        sys.stdout.write(
+            "usage: tier-mcp [ROOT]\n\n"
+            "Zero-dependency MCP stdio server for TIER docs.\n"
+            "ROOT defaults to the current directory.\n\n"
+            "Reads JSON-RPC 2.0 requests on stdin and writes responses on stdout.\n"
+            "Set TIER_AUTO_SYNC_TTL (seconds) to tune the repository-map auto-sync cache.\n\n"
+            "Tools: " + ", ".join(t["name"] for t in TOOLS) + "\n"
+        )
+        return
+    if any(a in ("-V", "--version") for a in args):
+        sys.stdout.write(f"tier-mcp {VERSION}\n")
+        return
     try:
         sys.stdin.reconfigure(errors="replace")
         sys.stdout.reconfigure(errors="replace")

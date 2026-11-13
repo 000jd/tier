@@ -132,14 +132,14 @@ def _rule_count(sec: Section) -> int:
     return sum(1 for l in _live_lines(sec.lines) if l.startswith("! "))
 
 
-def index(doc: Doc, tokens: bool = True) -> str:
+def index(doc: Doc, tokens: bool = True, fast: bool = None) -> str:
     """L0 + L1: title, summary, global rules, one line per section."""
     head = doc.meta.get("title", "")
     if doc.meta.get("sum"):
         head += (" - " if head else "") + doc.meta["sum"]
     out = [head] if head else []
     out += ["! " + r for r in doc.rules]
-    counts = count_tokens([s.text() for s in doc.sections])[0] if tokens else [None] * len(doc.sections)
+    counts = count_tokens([s.text() for s in doc.sections], fast=fast)[0] if tokens else [None] * len(doc.sections)
     for s, c in zip(doc.sections, counts):
         rc = _rule_count(s)
         label = s.abstract or s.title

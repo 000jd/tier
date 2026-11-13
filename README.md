@@ -1,17 +1,17 @@
 <div align="center">
 
-# TIER v1.0.0 — Tiered Information for Efficient Retrieval
+# TIER v1.0.1 — Tiered Information for Efficient Retrieval
 
 **A 4-layer context format, codebase graph indexer, and zero-dependency MCP server that cuts AI agent token usage by 86%–97%.**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![Zero Dependencies](https://img.shields.io/badge/Zero%20Dependencies-none-brightgreen)](pyproject.toml)
 [![MIT License](https://img.shields.io/badge/MIT-License-blue)](LICENSE)
-[![Tests 103/103](https://img.shields.io/badge/Tests-103%2F103-brightgreen)](tests/)
+[![Tests 112/112](https://img.shields.io/badge/Tests-112%2F112-brightgreen)](tests/)
 [![CI](https://github.com/000jd/tier/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![MCP 2.3 Compatible](https://img.shields.io/badge/MCP-2.3%20Compatible-8A2BE2)](src/tier/mcp/sdk_server.py)
 
-[Quickstart](#30-second-quickstart) · [See it in action](#see-it-in-action) · [Benchmarks](#verified-benchmarks) · [Architecture](ARCHITECTURE.md) · [Format spec](SPEC.md)
+[Install](#installation--quickstart) · [Why TIER?](#why-tier-how-it-works-under-the-hood) · [See it in action](#see-it-in-action) · [Benchmarks](#verified-benchmarks) · [Architecture](ARCHITECTURE.md) · [Format spec](SPEC.md)
 
 </div>
 
@@ -21,37 +21,348 @@ TIER keeps AI agents from loading whole repositories and documents into context.
 
 The core is **100% Python standard library** — no runtime dependencies, no API calls, no telemetry. Optional extras add terminal styling and the official MCP SDK adapter.
 
-## 30-Second Quickstart
+## Installation & Quickstart
 
-Requires Python 3.10+ (the official `mcp` SDK also requires 3.10+). Install into an isolated
-tool environment straight from Git — no virtualenv or PEP 668 workaround needed:
+### Prerequisites
 
-```sh
-uv tool install git+https://github.com/000jd/tier      # recommended
-pipx install git+https://github.com/000jd/tier         # equivalent with pipx
-```
+| Requirement | Why it matters | Check |
+|---|---|---|
+| **Python 3.10+** | Required runtime. The official `mcp` SDK also requires 3.10+; 3.9 reached end of life in October 2025. | `python3 --version` |
+| **`uv` or `pipx`** *(recommended)* | Installs the CLI into an isolated environment, so you never hit PEP 668 "externally managed environment" errors on Linux or fight a global site-packages tree. | `uv --version` / `pipx --version` |
+| **Node 18+** *(optional)* | Enables exact `o200k_base` BPE counts through a persistent worker. Without it TIER falls back to a deterministic characters/4 estimate and says so in `tier doctor`. | `node --version` |
+| **Git** | Only for installing from the Git URL below. | `git --version` |
 
-For development inside a virtualenv:
+### Step 1 — Install the CLI
 
-```sh
-python3 -m venv .venv && . .venv/bin/activate
-python3 -m pip install -e .
-```
-
-> **Package name.** The bare name `tier` on PyPI is an unrelated 2022 stub package, and
-> `pip install tier` will install the wrong project. Install from the Git URL above (the
-> distribution is published as `tier-ctx` when installing from an index), or from a local
-> checkout. A bare `pip install .` inside a system interpreter also fails on PEP 668
-> externally-managed Linux distributions — use `uv tool`/`pipx` or a venv.
-
-Then run the two commands that configure and verify everything:
+Install straight from Git into an isolated tool environment. No virtualenv and no PEP 668 workaround needed:
 
 ```sh
-tier install      # interactive wizard: Claude Code, Claude Desktop, Cursor, VS Code, Windsurf
-tier doctor       # environment, configs, repo.tier, lint, and sync checks
+# recommended
+uv tool install git+https://github.com/000jd/tier
+
+# or with pipx
+pipx install git+https://github.com/000jd/tier
 ```
 
-`tier install` writes safe `.bak` backups, preserves other MCP servers, and is idempotent. Use `--clients`, `--yes`, `--dry-run`, or `--uninstall` for scripts and CI. `tier setup` is an alias.
+Add the optional extras (`rich` terminal styling + the official `mcp` SDK adapter) with:
+
+```sh
+uv tool install "tier-ctx[all] @ git+https://github.com/000jd/tier"
+# or:  pipx install "tier-ctx[all] @ git+https://github.com/000jd/tier"
+```
+
+Or install from a local clone inside a virtual environment:
+
+```sh
+git clone https://github.com/000jd/tier
+cd tier
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -e ".[all]"
+```
+
+> **Package name — read this once.** The distribution is published as **`tier-ctx`**; the import
+> package and the console scripts are `tier`, `tier-mcp`, and `tier-mcp-sdk`. The bare name `tier`
+> on PyPI is an unrelated 2022 stub package, so **`pip install tier` installs the wrong project** —
+> always install `tier-ctx` or the Git URL above. A bare `pip install .` inside a system interpreter
+> also fails on PEP 668 externally-managed distributions; use `uv tool`, `pipx`, or a venv.
+
+Verify the entrypoints resolve:
+
+```sh
+tier --version          # tier 1.0.1
+tier-mcp --version      # tier-mcp 1.0.1
+tier-mcp --help         # usage + the 11 tools (needs no dependencies)
+```
+
+### Step 2 — Connect your AI assistant in 10 seconds
+
+Point TIER at your project root. The wizard detects your clients, previews a diff, backs up every file it touches, and merges rather than overwrites:
+
+```sh
+cd /path/to/your/project
+tier install        # interactive: Claude Code, Claude Desktop, Cursor, VS Code, Windsurf
+```
+
+For scripts and CI, skip the prompts:
+
+```sh
+tier install . --clients claude-code,cursor,vscode --yes
+```
+
+Then confirm everything is wired up correctly:
+
+```sh
+tier doctor .
+```
+
+`tier doctor` prints one row per check and exits nonzero only on a `FAIL`. The fixed rows cover the Python version, entrypoints, tokenizer backend, target root, `repo.tier` presence, repo lint, and repo sync freshness; detected client configs, TIER hooks, and the optional `mcp` extra add one row each. A healthy project reads `0 failed, 0 warnings` — a bare project with no clients configured has **9** rows, and each registered client or hook adds one.
+
+What the installer guarantees:
+
+- Every existing JSON config is backed up to `<file>.bak` before an atomic merge.
+- Unrelated servers, hooks, and keys are preserved. Re-running is idempotent.
+- `CLAUDE.md` / `AGENTS.md` are backed up too, and unbalanced `TIER:BEGIN`/`TIER:END` markers are never sliced through — user text is preserved and a warning is printed.
+- The server entry prefers an absolute `tier-mcp` executable and otherwise falls back to the absolute current interpreter with `-m tier.mcp`, so GUI hosts do not depend on shell `PATH`.
+
+Use `--dry-run` to print unified diffs without touching disk, and `--uninstall` to remove only TIER entries:
+
+```sh
+tier install . --clients all --dry-run
+tier install . --uninstall --clients all
+tier install . --no-repo --no-hook --instructions none
+```
+
+<details>
+<summary><b>Per-Client Setup &amp; Manual JSON Configs (Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, MCP Inspector)</b></summary>
+
+Every client below can be configured automatically with `tier install . --clients <id> --yes`. Replace `/abs/path/to/project` with your project root (use a POSIX path such as `/c/Users/me/proj` or `C:\\Users\\me\\proj` as appropriate for the host).
+
+| Client id | Scope | Config file | Key |
+|---|---|---|---|
+| `claude-code` | project | `.mcp.json` | `mcpServers` |
+| `claude-code` | project | `.claude/settings.json` | `hooks.PostToolUse` (compression hook) |
+| `claude-code-user` | user | `~/.claude.json` | `mcpServers` |
+| `claude-desktop` | user | macOS `~/Library/Application Support/Claude/claude_desktop_config.json`<br>Linux `~/.config/Claude/claude_desktop_config.json`<br>Windows `%APPDATA%\Claude\claude_desktop_config.json` | `mcpServers` |
+| `cursor` | project | `.cursor/mcp.json` | `mcpServers` |
+| `cursor-global` | user | `~/.cursor/mcp.json` | `mcpServers` |
+| `vscode` | project | `.vscode/mcp.json` | `servers` (entry includes `"type": "stdio"`) |
+| `windsurf` | user | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` |
+
+#### Claude Code
+
+```sh
+# Let TIER write both .mcp.json and the PostToolUse hook:
+tier install . --clients claude-code --yes
+
+# Or register the server yourself with the Claude Code CLI:
+claude mcp add tier -- tier-mcp /abs/path/to/project
+claude mcp add --scope project tier -- tier-mcp /abs/path/to/project   # shared via .mcp.json
+claude mcp list
+```
+
+`tier install` writes this into `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "/usr/local/bin/tier-mcp",
+      "args": ["/abs/path/to/project"]
+    }
+  }
+}
+```
+
+…and registers the output-compression hook in `.claude/settings.json`. The hook runs on `PostToolUse` for `Bash|Read|Grep|Glob|WebFetch`, keeps tool output inside a 600-token budget, and is a no-op when the payload already fits:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Read|Grep|Glob|WebFetch",
+        "hooks": [
+          { "type": "command", "command": "/usr/local/bin/tier hook --max-tokens 600" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+If you would rather not install the hook, pass `--no-hook`.
+
+#### Claude Desktop
+
+```sh
+tier install . --clients claude-desktop --yes
+```
+
+Uses the same `mcpServers` shape as above in the platform path from the table. Restart Claude Desktop after the change.
+
+#### Cursor
+
+```sh
+tier install . --clients cursor --yes          # project: .cursor/mcp.json
+tier install . --clients cursor-global --yes   # user:    ~/.cursor/mcp.json
+```
+
+```json
+{
+  "mcpServers": {
+    "tier": {
+      "command": "/usr/local/bin/tier-mcp",
+      "args": ["/abs/path/to/project"]
+    }
+  }
+}
+```
+
+#### VS Code (Copilot MCP)
+
+```sh
+tier install . --clients vscode --yes
+```
+
+VS Code uses the `servers` key and an explicit stdio type:
+
+```json
+{
+  "servers": {
+    "tier": {
+      "command": "/usr/local/bin/tier-mcp",
+      "args": ["/abs/path/to/project"],
+      "type": "stdio"
+    }
+  }
+}
+```
+
+#### Windsurf
+
+```sh
+tier install . --clients windsurf --yes
+```
+
+Writes `mcpServers` into `~/.codeium/windsurf/mcp_config.json`.
+
+#### MCP Inspector (browser, interactive testing)
+
+The Inspector needs the `[mcp]` extra, because it drives the official-SDK adapter:
+
+```sh
+# one command from a checkout, opens the Inspector UI
+mcp dev src/tier/mcp/sdk_server.py
+
+# or serve the same 11 tools over Streamable HTTP and point the Inspector at it
+tier-mcp-sdk /abs/path/to/project --transport streamable-http --host 127.0.0.1 --port 8000
+```
+
+You can also inspect the zero-dependency server with no Python extras at all:
+
+```sh
+npx @modelcontextprotocol/inspector tier-mcp /abs/path/to/project
+```
+
+Each server exposes the same 11 tools: `tier_list`, `tier_index`, `tier_find`, `tier_get`, `tier_slice`, `tier_impact`, `tier_sync`, `tier_lint`, `tier_ingest`, `tier_repo`, `tier_remember`.
+
+> **Windows note.** Prefer the absolute `tier-mcp` path that `tier install` writes. If you point a GUI host at `python`, use the full interpreter path so it does not depend on `PATH` inherited from a shell profile.
+
+</details>
+
+## Why TIER? (How It Works Under the Hood)
+
+Seven design decisions, each tied to a measured number in [`benchmarks/BENCH.txt`](benchmarks/BENCH.txt). TIER measures **tokens and retrieval identifiers**, not LLM answer accuracy.
+
+### 1. High token efficiency: header-once tables and indented key/value trees
+
+Pretty JSON spends context on quotes, braces, colons, and a repeated copy of every key. Markdown tables spend it on repeated pipe-and-dash borders.
+
+**The TIER advantage.** A TIER table is a header plus exactly `N` CSV rows:
+
+```
+|orders[60]{id,customer,status,items,total,created}
+1000,Ana Silva,paid,7,262.12,2026-02-27
+```
+
+That is **1,331 tokens vs 3,393 for pretty JSON (−61%)** — the same compactness as raw CSV (1,327) while keeping the column schema and an explicit row count `N` that lets a parser detect truncation. On retrieval, `--table aligned` renders a spaced Markdown table and `--table anchored` emits per-row primary-key anchors (`[1000] id: 1000 | customer: …`) with the column list repeated every 20 rows for long tables, without changing the stored bytes.
+
+Nested data becomes an indented key/value tree instead of a brace nest:
+
+```
+= service
+  name payments-api
+  limits
+    replicas
+      min 8
+```
+
+At **143 tokens**, that is **−39% vs pretty JSON and −13% vs YAML** (`Bench A & B`).
+
+### 2. Four-layer progressive disclosure, L0 through L3
+
+Markdown and JSON are all-or-nothing: an agent that needs one function typically pulls in the whole file. TIER makes the layers explicit:
+
+| Layer | Contents | When an agent reads it |
+|---|---|---|
+| **L0** | Document metadata, global `%rule` constraints, and the section map, each line carrying its token cost (`~Nt`) and rule count (`!R`) | Always — a few hundred tokens |
+| **L1** | One-line `?` abstracts saying *when* to fetch the section | Always, folded into the L0 index |
+| **L2** | Full section bodies; for repositories, `\|symbols` tables with exact `[Lstart-Lend]` ranges and `>` dependency edges | On demand, per module |
+| **L3** | Exact function, class, or method source lines via `tier slice` / `tier_slice` | Surgically, per symbol |
+
+**The TIER advantage.** On the payments runbook an agent loads a **352-token L0 index instead of the 1,463-token Markdown file (−76%)**. For a codebase, this repository's `src/tier` maps to a **717-token L0** and **1,484 tokens for L0 plus one module plus its one-hop dependencies — 97% fewer than the 54,766 raw source tokens**. Across indexing and a full five-step edit workflow, progressive disclosure cuts consumption by **86% to 97%** (`Bench F & G`).
+
+### 3. Deterministic line-start sigils, so structure is never ambiguous
+
+In Markdown, a `#` heading inside a pasted log or README is indistinguishable from a document heading, and section boundaries blur.
+
+Every TIER line is classified by its first character, with one meaning and no exceptions:
+
+| Sigil | Meaning |
+|---|---|
+| `%` | document header (`%title`, `%sum`, `%rule`) |
+| `@` | section boundary |
+| `?` | abstract — when to read the section |
+| `!` | imperative rule |
+| `=` | key/value tree (2 spaces per level) |
+| `\|` | counted table (`\|name[N]{cols}` + `N` rows) |
+| `>` | graph reference edge |
+| `$` | shell command |
+| `<<<` ... `>>>` | opaque untrusted data block (optional `#guard` on the close line) |
+| triple backtick | opens and closes a verbatim fenced block; contents are never parsed |
+| `\` | escape: the next line is prose even if it starts with a sigil |
+
+**The TIER advantage.** The parser and the model agree on the same rule, so hard constraints (`!`), traversable graph edges (`>`), and prose stay separable without decorative markup. Fenced code, untrusted blocks, and table rows are opaque — no sigil inside them is ever reinterpreted.
+
+### 4. Untrusted data guards that are provably contained
+
+When an agent ingests a log, a web scrape, or a ticket, embedded instructions (`Ignore previous instructions…`) or fake section headers can turn into indirect prompt injection.
+
+**The TIER advantage.** External text is wrapped in a named guard block, and only the matching close line ends it:
+
+```
+<<<web:example.com #g1
+...arbitrary external text; @, !, %, and | here are all inert...
+>>>g1
+```
+
+`wrap_untrusted()` in [`parser.py`](src/tier/parser.py) scans the payload's closing lines and picks the first guard `g1`, `g2`, … that does **not** occur in it, so a payload cannot forge its own terminator. The test suite fuzzes this with **120 randomized payloads drawn from 27 adversarial escape patterns** — bare `>>>`, spoofed `>>>g1`, trailing whitespace, NUL / non-breaking-space / zero-width-space tricks, `<<<x #g99`, and fake `@`, `%`, `!`, `|`, and `$` lines — and asserts that each stays inside a single opaque block with every payload line preserved. Running that fuzz reports **0 escapes**. The v0.1 unguarded form still parses, closing at the first `>>>`.
+
+### 5. Stateful session deduplication
+
+In a multi-turn loop an agent re-reads the same section, or pulls overlapping `>` hops, and pays for the same tokens twice.
+
+**The TIER advantage.** `Session` in [`retrieval.py`](src/tier/retrieval.py) records every `[document, section]` pair and every `section#symbol` L3 slice already delivered. A repeat request returns a one-line stub — `@section-id (already in context; not resent)` — instead of the body; `force=True` re-sends it, and `reset()` clears the cache. On the eight-question runbook session, **L0 + top-1 + dedup stays below the full Markdown document at every single question**, and dedup avoids re-sending **843 tokens** on the top-2 path (`Bench C`).
+
+When `tier sync` detects an on-disk edit it evicts exactly the affected sections and their slices, including the MCP server's shared cache, so a stale body is never served as if it were current.
+
+### 6. Polyglot codebase graph and blast-radius impact analysis
+
+Flat text formats treat a repository as a pile of files. TIER indexes it as a graph:
+
+- **Python** symbols come from the built-in `ast` module, with decorator-inclusive start lines so a slice never begins mid-definition.
+- **TypeScript / JavaScript / Go / Rust** symbols come from brace matchers that ignore braces inside strings, template literals, and comments, and handle multi-line signatures, arrow bodies, and Rust lifetimes.
+- Each module records a `= file` fingerprint tree (`path`, `language`, `lines`, `sha256`, `mtime`, `size`) and a `|symbols[N]{kind,name,signature,lines}` table.
+- Local Python imports, relative JS/TS imports, Go imports resolved through `go.mod`, and Rust `mod`/`use crate::` paths become `>` edges.
+
+**The TIER advantage.** `tier impact <repo.tier> <module>` inverts that graph to report direct callers, transitive dependents, dependencies, and — with `--git` — changed symbols plus every downstream module that must be re-tested. `tier_impact` exposes the same report over MCP.
+
+On this repository the map preserves **230/230 symbols** and **76 internal edges** with 0 lint errors; on the 36-file polyglot fixture it preserves **116/116 symbols**, **116/116 accurate line ranges**, and **10/10 cross-file edges**, and the surgical L0 + target L2 + 7 L3 slices path costs **2,854 tokens against 8,249 raw (−65%)** (`Bench F & H`). The end-to-end workflow retrieves **3/3 exact slices** and **10/10 expected dependents** (`Bench G`).
+
+### 7. Hybrid search with zero external vector databases
+
+Conventional RAG needs an embedding API and a vector store, which means network calls, keys, and per-query cost.
+
+**The TIER advantage.** [`retrieval.py`](src/tier/retrieval.py) is an in-memory hybrid retriever:
+
+- BM25-style scoring with field weights (title 8×, abstract 4×, rules 3×, body and table capped).
+- Identifier splitting for `camelCase`, `PascalCase`, `snake_case`, and `kebab-case`.
+- A compact engineering/operations synonym map, with conservative plural normalization (`queries → query`, but `process`, `status`, and `analysis` keep their `s`).
+- Character 3-gram fallback for typos, plus a table-field boost.
+- Navigation priors: test modules are down-weighted unless the query mentions tests, and table-of-contents sections are down-weighted for content queries.
+
+Document frequencies and IDF are computed **once per query**, which removes the extra factor of section count from the scoring loop: a query over **800 sections completes in about 210 ms** (median of 5 runs) and is linear in section count for a fixed query. Accuracy is **10/10 hit@1 on paraphrase queries** (`Bench E`, up from 7/10 for the exact-prefix v0.2 matcher) and **15/15 hit@1 and hit@2 across a 197-section, multi-document blind corpus** (`Bench I`), with no embeddings, no network, and no dependencies.
 
 ## See It in Action
 
@@ -60,16 +371,16 @@ $ tier from-repo . -o repo.tier
 wrote repo.tier
 
 $ tier index repo.tier | head -4
-tier repository map - 24 source files; languages: javascript 1, python 23; entrypoints: ...
+tier repository map - 25 source files; languages: javascript 2, python 23; entrypoints: ...
 ! Read the repo.tier module map before opening source files; fetch only the listed line ranges.
 ! Use tier_get with follow=true to pull a module and its direct local dependencies.
 ! Use tier_slice for exact L3 source slices instead of reading whole files.
 
 $ tier find repo.tier "parse TIER document" -k 1
-@src-tier-parser.py  46.75  src/tier/parser.py (python module); symbols: wrap_untrusted, parse, nodes, ...
+@src-tier-parser.py  48.0  src/tier/parser.py (python module); symbols: wrap_untrusted, parse, nodes, ...
 
 $ tier slice repo.tier src/tier/parser.py parse
-@src-tier-parser.py#parse [L43-L111]
+@src-tier-parser.py#parse [L43-L130]
     def parse(text: str) -> Doc:
         doc = Doc()
         ...
@@ -80,18 +391,18 @@ Direct dependents: @src-tier-__init__.py, @src-tier-cli.py, @src-tier-converter.
 Dependencies: @src-tier-models.py
 ```
 
-**Measured on this repository:** 49,725 raw `src/tier` tokens → **695-token L0** → **1,460-token L0 + one-hop**. The complete five-step workflow costs **4,441 tokens (−91.1%)** while retrieving 3/3 exact slices and 10/10 dependents.
+**Measured on this repository:** 54,766 raw `src/tier` tokens → **717-token L0** → **1,484-token L0 + one-hop**. The complete five-step workflow costs **4,687 tokens (−91.4%)** while retrieving 3/3 exact slices and 10/10 dependents.
 
 ## Core Capabilities
 
 | Capability | What it does |
 |---|---|
 | **4-Layer Progressive Disclosure** | L0 index, L1 abstracts, L2 signatures and `>` edges, L3 exact source lines. Load only the layer you need. |
-| **Polyglot Repo Maps** | Python AST plus JS/TS/Go/Rust symbol extractors, exact line ranges, fingerprints, and local import edges. Verified **203/203 symbols** and **75 edges** on this repo. |
+| **Polyglot Repo Maps** | Python AST plus JS/TS/Go/Rust symbol extractors, exact line ranges, fingerprints, and local import edges. Verified **230/230 symbols** and **76 edges** on this repo. |
 | **Hybrid Search** | Identifier splitting, BM25-style field weights, synonyms, trigrams, table boosts, and navigation priors. **15/15 hit@1** on a 197-section blind corpus. |
 | **Collision-Free Untrusted Guards** | `wrap_untrusted` picks a guard that cannot be forged in the payload; `<<<source #g1 ... >>>g1` keeps external text opaque. |
-| **Stateful Write-Back Memory** | `tier_remember` persists verified rules, decisions, keys, and references with atomic, lint-checked writes. |
-| **Stream & Hook Compression** | `tier pipe` and `tier hook` collapse noisy logs, JSON, and tool output; malformed and binary input are handled safely. |
+| **Stateful Write-Back Memory** | `tier_remember` persists verified rules, decisions, keys, and references with atomic, lint-checked writes and configurable size bounds. |
+| **Stream & Hook Compression** | `tier pipe` and `tier hook` collapse noisy logs, JSON, and tool output; the hook enforces its token budget exactly, and malformed or binary input is handled safely. |
 | **Safe Interactive Installer** | `tier install` detects five host families, backs up configs, previews diffs, and uninstalls only TIER entries. `tier doctor` verifies the result. |
 
 ## Verified Benchmarks
@@ -105,12 +416,12 @@ All numbers below are from [`benchmarks/BENCH.txt`](benchmarks/BENCH.txt), produ
 | **C** | Payments runbook retrieval | **8/8 hit@1**, **8/8 hit@2**; 352-token L0; mean top-1 fetch 124 tokens |
 | **D** | 5 real GitHub Markdown docs | **+2% to +15%** vs Markdown; **99.2–100%** word recall; 0 lint errors |
 | **E** | Paraphrase retrieval | **10/10 hit@1** (v0.2 exact-prefix: 7/10) |
-| **F** | Repository map (`src/tier`) | 49,725 raw → **7,200 full map (−86%)**; **695 L0**; **1,460 L0 + 1-hop (−97%)**; **203/203 symbols**, **75 edges**, 0 lint errors |
-| **G** | End-to-end 4-layer workflow | **4,441 tokens (−91.1%)**; 3/3 exact slices; 10/10 expected dependents |
+| **F** | Repository map (`src/tier`) | 54,766 raw → **7,834 full map (−86%)**; **717 L0**; **1,484 L0 + 1-hop (−97%)**; **230/230 symbols**, **76 edges**, 0 lint errors |
+| **G** | End-to-end 4-layer workflow | **4,687 tokens (−91.4%)**; 3/3 exact slices; 10/10 expected dependents |
 | **H** | Polyglot fixture (Python/TS/Go/Rust) | **116/116 symbols**, **116/116 ranges**, **10/10 edges**; surgical context **2,854 vs 8,249 (−65%)** |
-| **I** | 197-section blind retrieval | **15/15 hit@1**, **15/15 hit@2**; mean top-1 **134 tokens**; **6,039 vs 52,275 (−88%)** |
+| **I** | 197-section blind retrieval | **15/15 hit@1**, **15/15 hit@2**; mean top-1 **134 tokens**; **6,038 vs 52,803 (−89%)** |
 
-The checked-in self-index [`repo.tier`](repo.tier) maps 24 source files in **11,034 tokens** with an **893-token L0** (8%). Reproduce the full suite:
+The checked-in self-index [`repo.tier`](repo.tier) maps 25 source files in **12,700 tokens** with a **963-token L0** (8%). Reproduce the full suite:
 
 ```sh
 ./benchmarks/fetch_corpus.sh     # optional: Tracks D and I corpus
@@ -118,40 +429,14 @@ python3 benchmarks/bench.py      # writes benchmarks/BENCH.txt
 ```
 
 <details>
-<summary><b>Supported AI Clients & Install Commands</b></summary>
-
-`tier install` / `tier setup` detects and configures:
-
-| Client | Config paths |
-|---|---|
-| **Claude Code (project)** | `.mcp.json`, `.claude/settings.json` (hook), `CLAUDE.md`, `AGENTS.md` |
-| **Claude Code (user)** | `~/.claude.json`, `~/.claude/settings.json`, `~/.claude/CLAUDE.md` |
-| **Claude Desktop** | macOS `~/Library/Application Support/Claude/claude_desktop_config.json`; Linux `~/.config/Claude/claude_desktop_config.json`; Windows `%APPDATA%\Claude\claude_desktop_config.json` |
-| **Cursor** | project `.cursor/mcp.json` or global `~/.cursor/mcp.json` |
-| **VS Code (Copilot MCP)** | project `.vscode/mcp.json` (`servers` key, `stdio` entry) |
-| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` |
-
-```sh
-tier install                                      # interactive
-tier install --clients claude-code,cursor --yes   # scripted
-tier install --clients all --dry-run              # preview diffs only
-tier install --uninstall --clients all            # remove TIER entries only
-tier install --no-repo --no-hook --instructions none
-```
-
-Every existing JSON config and every `CLAUDE.md`/`AGENTS.md` is backed up to `<file>.bak` before an atomic merge. Existing servers, hooks, and keys are preserved. Instruction files whose `TIER:BEGIN`/`TIER:END` markers are unbalanced are never sliced: the installer appends after the user's text and reports a warning instead of destroying content. The installer prefers an absolute `tier-mcp` executable, falling back to the absolute current interpreter with `-m tier.mcp`, so GUI hosts do not depend on shell `PATH`.
-
-</details>
-
-<details>
 <summary><b>Optional Extras (<code>[ui]</code>, <code>[mcp]</code>, <code>[all]</code>)</b></summary>
 
 The default runtime is **stdlib-only**, with `dependencies = []`. Extras install from the same Git URL:
 
 ```sh
-uv tool install "tier[ui] @ git+https://github.com/000jd/tier"    # rich terminal rendering
-uv tool install "tier[mcp] @ git+https://github.com/000jd/tier"   # official mcp v2 SDK adapter
-uv tool install "tier[all] @ git+https://github.com/000jd/tier"   # both
+uv tool install "tier-ctx[ui] @ git+https://github.com/000jd/tier"    # rich terminal rendering
+uv tool install "tier-ctx[mcp] @ git+https://github.com/000jd/tier"   # official mcp v2 SDK adapter
+uv tool install "tier-ctx[all] @ git+https://github.com/000jd/tier"   # both
 # inside a venv from a checkout: pip install -e ".[ui]" / ".[mcp]" / ".[all]"
 ```
 
@@ -164,7 +449,7 @@ python3 -m tier.mcp.sdk_server /path/to/docs --transport streamable-http --host 
 mcp dev src/tier/mcp/sdk_server.py
 ```
 
-Without the extra, `tier-mcp-sdk` prints the exact `pip install "tier[mcp]"` command and exits cleanly. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib JSON-RPC implementation.
+Without the extra, `tier-mcp-sdk` prints the exact `pip install "tier-ctx[mcp]"` command and exits cleanly. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib JSON-RPC implementation.
 
 </details>
 
@@ -183,10 +468,10 @@ Without the extra, `tier-mcp-sdk` prints the exact `pip install "tier[mcp]"` com
 | `tier slice FILE MODULE SYMBOL...` | Exact L3 source lines |
 | `tier impact FILE TARGET` | Forward/reverse dependency and Git blast radius |
 | `tier from-repo PATH` | Build a polyglot repository map |
-| `tier sync FILE` | Incremental fingerprint-based refresh |
+| `tier sync FILE` | Incremental fingerprint-based refresh; `--rehash` for a content comparison |
 | `tier remember FILE` | Atomic write-back memory |
 | `tier pipe` | Compress stdin JSON/Markdown/logs with an optional budget |
-| `tier hook` | Claude Code-style `PostToolUse` JSON filter |
+| `tier hook` | Claude Code-style `PostToolUse` JSON filter; `--fast` for estimator-only counting |
 | `tier lint FILE` | Structural validation |
 | `tier from-md FILE` / `to-md` / `to-json` / `compress` | Format conversion |
 | `tier init-plugin TARGET` | Legacy one-command MCP + repo + hook setup |
@@ -210,14 +495,14 @@ TIER runs entirely on your machine. There are **no telemetry, analytics, API key
 - Full benchmark output: [benchmarks/BENCH.txt](benchmarks/BENCH.txt)
 
 ```sh
-python3 -m unittest discover -s tests -q     # 103 tests
-tier doctor .                                # 10 checks: 0 failed, 0 warnings
+python3 -m unittest discover -s tests -q     # 112 tests
+tier doctor .                                # checks: 0 failed, 0 warnings
 python3 benchmarks/bench.py                  # Tracks A-I; writes benchmarks/BENCH.txt
 tier from-repo . -o repo.tier                # refresh the checked-in self-index
 tier lint repo.tier && tier lint SPEC.tier
 ```
 
-**Limits.** Only token counts, retrieval identifiers, and exact-slice coverage are measured — not LLM answer accuracy. Claude's tokenizer is not public; counts use OpenAI `o200k` via a persistent Node worker with an in-memory cache (or a character estimate when Node is unavailable). `tier hook` uses the deterministic estimator so it never pays Node startup. JS/TS/Go/Rust symbol extraction is heuristic, not a full parser. A `--max-tokens` budget below the saved artifact-path cost is best-effort.
+**Limits.** Only token counts, retrieval identifiers, and exact-slice coverage are measured — not LLM answer accuracy. Claude's tokenizer is not public; counts use OpenAI `o200k` via a persistent Node worker with an in-memory cache (or a character estimate when Node is unavailable). `tier hook` treats its token budget as a contract: it skips a payload only when it is provably within budget, otherwise it counts exactly and verifies the emitted context. `--fast` opts into estimator-only counting, which is best-effort. `tier sync` trusts recorded `mtime`+`size` as a cache; use `tier sync --rehash` to compare content hashes after tooling that restores timestamps. JS/TS/Go/Rust symbol extraction is heuristic, not a full parser. A `--max-tokens` budget below the saved artifact-path cost is best-effort.
 
 ## License
 

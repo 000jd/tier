@@ -20,6 +20,12 @@ _SHAPE_HEX_RE = re.compile(r"\b[0-9a-fA-F]{8,}\b")
 _SHAPE_IP_RE = re.compile(r"\b\d+\.\d+\.\d+\.\d+\b")
 _SHAPE_NUM_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
 _SHAPE_WS_RE = re.compile(r"\s+")
+# characters/4 is only a lower bound: a token can be a single character, so the
+# exact count can be up to 4x the estimate (measured worst case on dense JSON
+# and minified code is 2.34x). A budget decision made from the estimate must use
+# the rigorous 4x bound, otherwise the hook can pass through a payload that is
+# well over its cap.
+ESTIMATE_SAFETY = 4.0
 
 
 def detect_stream_format(text: str) -> str:
@@ -174,7 +180,7 @@ def pipe_compress(text: str, fmt: str = "auto", max_tokens: int = None, out_path
         return artifact_line
 
     parts = [artifact_line]
-    idx_text = _fit_text(index(doc), budget - _tokens(artifact_line, fast=fast), fast=fast)
+    idx_text = _fit_text(index(doc, fast=fast), budget - _tokens(artifact_line, fast=fast), fast=fast)
     if idx_text:
         candidate = idx_text + "\n" + artifact_line
         if _tokens(candidate, fast=fast) <= budget:
@@ -219,14 +225,26 @@ def _text_fields(obj, prefix: str = "", depth: int = 0) -> list:
     return out
 
 
-def hook_process(text: str, max_tokens: int = 600, fmt: str = "auto", exact: bool = False) -> dict:
+def _probe_exact() -> bool:
+    """True when an exact tokenizer backend is actually available."""
+    return count_tokens([""])[1] == "o200k"
+
+
+def hook_process(text: str, max_tokens: int = 600, fmt: str = "auto", exact: bool = True) -> dict:
     """Handle a JSON stdin hook payload without blocking or crashing.
 
-    Hook mode defaults to the deterministic characters/4 estimator so the first
-    tool call pays no Node startup; pass exact=True to request BPE counts.
+    Budget decisions use exact o200k counts by default. A characters/4 estimate
+    under-counts dense code by up to ~2.4x, which would hand the agent a payload
+    well over budget, so the estimator is only allowed to make the *safe*
+    pass-through decision: a payload is skipped without Node only when even the
+    worst-case estimator error leaves it under the cap. Anything else is
+    counted exactly (one persistent-worker call), and the emitted context is
+    verified exactly before it is returned.
+
+    Pass exact=False to opt into estimator-only counting; that path multiplies
+    by ESTIMATE_SAFETY and remains best-effort rather than a guarantee.
     """
     max_tokens = 600 if max_tokens is None else int(max_tokens)
-    fast = not exact
     malformed = False
     try:
         data = json.loads(text) if text.strip() else {}
@@ -235,35 +253,69 @@ def hook_process(text: str, max_tokens: int = 600, fmt: str = "auto", exact: boo
     if not isinstance(data, dict):
         data, malformed = {"tool_response": text}, True
     best_path, best_text, best_tokens = "", "", 0
+    counts = []
+    backend = "estimate"
     try:
         fields = _text_fields(data)
     except RecursionError:
         fields = [("payload", text)]
     long_fields = [(path, value) for path, value in fields if len(value) >= 200]
     if long_fields:
-        counts = count_tokens([value for _path, value in long_fields], fast=fast)[0]
+        values = [value for _path, value in long_fields]
+        # A token is at least one character, so a payload no longer than the
+        # budget is provably within it and needs no tokenizer at all.
+        if all(len(v) <= max_tokens for v in values):
+            counts = [len(v) for v in values]
+        elif exact:
+            estimate = count_tokens(values, fast=True)[0]
+            if max(estimate) * ESTIMATE_SAFETY > max_tokens:
+                counts, backend = count_tokens(values)
+            else:
+                counts = estimate
+        else:
+            counts, backend = count_tokens(values, fast=True)
         for (path, value), count in zip(long_fields, counts):
             if count > best_tokens:
                 best_path, best_text, best_tokens = path or "payload", value, count
-    if best_tokens <= max_tokens:
+    decision = best_tokens if backend == "o200k" else int(best_tokens * ESTIMATE_SAFETY)
+    if decision <= max_tokens:
         response = {"continue": True}
         if malformed:
             response["systemMessage"] = "tier hook: input was not JSON; nothing compressed"
         return response
     prefix = f"TIER compressed {best_path} ({best_tokens} tokens):\n"
+    have_exact = backend == "o200k" or (exact and _probe_exact())
     try:
-        compressed = pipe_compress(
-            best_text, fmt, max(1, max_tokens - _tokens(prefix, fast=fast)), fast=fast
-        )
+        if have_exact:
+            budget = max(1, max_tokens - _tokens(prefix))
+            compressed = pipe_compress(best_text, fmt, budget)
+        else:
+            # No exact backend: the cap cannot be verified, so shrink the
+            # budget by the safety factor and under-fill rather than over-fill.
+            budget = max(1, int((max_tokens - _tokens(prefix, fast=True)) / ESTIMATE_SAFETY))
+            compressed = pipe_compress(best_text, fmt, budget, fast=True)
     except Exception as e:
         return {"continue": True, "systemMessage": f"tier hook error: {e}"}
     event = data.get("hook_event_name") or data.get("hookEventName") or "PostToolUse"
     if not isinstance(event, str):
         event = "PostToolUse"
+    context = prefix + compressed
+    trimmed = False
+    mode = "estimated, best-effort"
+    if have_exact:
+        counts, check = count_tokens([context])
+        if check == "o200k":
+            mode = "exact"
+            if counts[0] > max_tokens:
+                context = _fit_text(context, max_tokens)
+                trimmed = True
+    message = f"TIER: compressed {best_tokens} tokens from {best_path} ({mode} counts)"
+    if trimmed:
+        message += f"; trimmed to {max_tokens}"
     return {
         "hookSpecificOutput": {
             "hookEventName": event,
-            "additionalContext": prefix + compressed,
+            "additionalContext": context,
         },
-        "systemMessage": f"TIER: compressed {best_tokens} tokens from {best_path}",
+        "systemMessage": message,
     }

@@ -1,4 +1,4 @@
-%tier 1.0.0
+%tier 1.0.1
 %title tier repository map
 %sum 25 source files; languages: javascript 2, python 23; entrypoints: src/tier/__main__.py, src/tier/cli.py, src/tier/mcp/__main__.py, src/tier/mcp/server.py
 %rule Read the repo.tier module map before opening source files; fetch only the listed line ranges.
@@ -9,10 +9,10 @@
 = file
   path benchmarks/bench.py
   language python
-  lines 1414
-  sha256 916780007b4375e7
-  mtime 1577817001000000000
-  size 50391
+  lines 1416
+  sha256 57cd37763f58292b
+  mtime 1794543784261763574
+  size 50515
 |symbols[21]{kind,name,signature,lines}
 function,_yaml_scalar,def _yaml_scalar(value) -> str,43-56
 function,_yaml_lines,"def _yaml_lines(value, indent: int=0) -> list",59-97
@@ -20,21 +20,21 @@ function,_yaml_dump,def _yaml_dump(value) -> str,100-103
 function,say,def say(s=''),108-110
 function,toks,def toks(strings),113-115
 function,table,"def table(rows, headers)",118-123
-function,bench_records,def bench_records(),127-172
-function,bench_nested,def bench_nested(),176-225
-function,bench_runbook,def bench_runbook(),241-288
-function,words,def words(s),292-293
-function,bench_corpus,def bench_corpus(),296-320
-function,bench_paraphrase,def bench_paraphrase(),338-356
-function,bench_repo,def bench_repo(),359-401
-function,bench_workflow,def bench_workflow(),405-505
-function,write_polyglot,def write_polyglot(root),1162-1168
-function,_poly_rows,"def _poly_rows(doc, rel)",1171-1181
-function,_poly_range_check,"def _poly_range_check(root, doc)",1184-1220
-function,bench_polyglot,def bench_polyglot(),1223-1284
-function,_merge_docs,def _merge_docs(docs),1308-1334
-function,_blind_corpus,def _blind_corpus(),1337-1352
-function,bench_blind_retrieval,def bench_blind_retrieval(),1355-1389
+function,bench_records,def bench_records(),127-174
+function,bench_nested,def bench_nested(),178-227
+function,bench_runbook,def bench_runbook(),243-290
+function,words,def words(s),294-295
+function,bench_corpus,def bench_corpus(),298-322
+function,bench_paraphrase,def bench_paraphrase(),340-358
+function,bench_repo,def bench_repo(),361-403
+function,bench_workflow,def bench_workflow(),407-507
+function,write_polyglot,def write_polyglot(root),1164-1170
+function,_poly_rows,"def _poly_rows(doc, rel)",1173-1183
+function,_poly_range_check,"def _poly_range_check(root, doc)",1186-1222
+function,bench_polyglot,def bench_polyglot(),1225-1286
+function,_merge_docs,def _merge_docs(docs),1310-1336
+function,_blind_corpus,def _blind_corpus(),1339-1354
+function,bench_blind_retrieval,def bench_blind_retrieval(),1357-1391
 > src-tier-__init__.py
 @benchmarks-count-server.mjs benchmarks/count-server.mjs
 ? Long-lived stdio token counter: reads one JSON array of strings per line, writes one JSON array of o200k_base token counts per line...; symbols: none
@@ -88,13 +88,13 @@ function,bench_blind_retrieval,def bench_blind_retrieval(),1355-1389
 = file
   path src/tier/cli.py
   language python
-  lines 344
-  sha256 8b958544a2494a51
-  mtime 1577817001000000000
-  size 14744
+  lines 350
+  sha256 1e2a0169d554e3dd
+  mtime 1794547524535591709
+  size 15108
 |symbols[2]{kind,name,signature,lines}
 function,_stdin_text,def _stdin_text() -> str,22-26
-function,main,def main(argv=None),29-344
+function,main,def main(argv=None),29-350
 > src-tier-converter.py
 > src-tier-doctor.py
 > src-tier-installer.py
@@ -143,9 +143,9 @@ function,to_md,def to_md(doc: Doc) -> str,408-451
   path src/tier/doctor.py
   language python
   lines 192
-  sha256 49c6f17af0fbcfaf
-  mtime 1577817001000000000
-  size 8265
+  sha256 eb2ab3427dd9924a
+  mtime 1794543705580029238
+  size 8269
 |symbols[7]{kind,name,signature,lines}
 class,Check,class Check,20-24
 function,_check_entry,"def _check_entry(spec: ClientSpec, root: str, find_executable) -> Check",27-65
@@ -165,11 +165,11 @@ function,render_json,def render_json(checks: Sequence[Check]) -> str,191-192
 = file
   path src/tier/installer.py
   language python
-  lines 624
-  sha256 390b96d7a33f193a
-  mtime 1577817001000000000
-  size 23976
-|symbols[39]{kind,name,signature,lines}
+  lines 643
+  sha256 0adaaf2ae8bd9632
+  mtime 1794543705580282698
+  size 24701
+|symbols[38]{kind,name,signature,lines}
 class,ClientSpec,class ClientSpec,22-34
 class,Change,class Change,37-42
 function,_home,def _home(home: Optional[str]) -> str,61-62
@@ -191,24 +191,23 @@ function,_hook_command,def _hook_command(find_executable=None) -> str,241-247
 function,_filter_hooks,"def _filter_hooks(post: list, desired: str, uninstall: bool=False)",250-272
 function,_merge_hook,"def _merge_hook(path: str, dry_run: bool, changes: List[Change], find_executable=None) -> None",275-293
 function,_remove_hook,"def _remove_hook(path: str, dry_run: bool, changes: List[Change]) -> None",296-308
-function,_marker_span,def _marker_span(existing: str),311-325
-function,markers_balanced,def markers_balanced(text: str) -> bool,328-329
-function,_marked_text,"def _marked_text(existing: str, block: str) -> str",332-341
-function,_strip_marked,def _strip_marked(existing: str) -> str,344-350
-function,_generic_instructions,def _generic_instructions() -> str,353-359
-function,_write_instructions,"def _write_instructions(path: str, block: str, dry_run: bool, changes: List[Change], warnings: List[str]=None) -> None",362-371
-function,_remove_instructions,"def _remove_instructions(path: str, dry_run: bool, changes: List[Change], warnings: List[str]=None) -> None",374-385
-function,_instruction_paths,"def _instruction_paths(specs: Sequence[ClientSpec], selected: Sequence[str], mode: str) -> List[str]",388-404
-function,_repo_stats,"def _repo_stats(root: str, doc: Doc) -> dict",407-414
-function,_generate_repo,"def _generate_repo(root: str, dry_run: bool, changes: List[Change]) -> dict",417-437
-function,_ask,"def _ask(ask: Optional[Callable[[str], str]], prompt: str, default: str) -> str",440-444
-function,_ask_bool,"def _ask_bool(ask, prompt: str, default: bool) -> bool",447-449
-function,_ask_instructions,"def _ask_instructions(ask, default: str='both') -> str",452-454
-function,_interactive_clients,"def _interactive_clients(specs: Sequence[ClientSpec], selected: Sequence[str], ask, ui: UI) -> List[str]",457-484
-function,_summary,"def _summary(ui: UI, result: dict) -> None",487-521
-function,install,"def install(target: str='.', clients=None, *, yes: bool=False, dry_run: bool=False, uninstall: bool=False, repo: bool=True, hook: bool=True, instructions: str='both', interactive: Optional[bool]=None, home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, ask=None, ui: Optional[UI]=None, find_executable=None) -> dict",524-590
-function,_uninstall,"def _uninstall(root: str, specs: Sequence[ClientSpec], selected: Sequence[str], dry_run: bool, ui: UI) -> dict",593-619
-function,setup,"def setup(*args, **kwargs) -> dict",622-624
+function,_marker_span,def _marker_span(existing: str),311-324
+function,markers_balanced,def markers_balanced(text: str) -> bool,327-348
+function,_marked_text,"def _marked_text(existing: str, block: str) -> str",351-360
+function,_generic_instructions,def _generic_instructions() -> str,363-369
+function,_write_instructions,"def _write_instructions(path: str, block: str, dry_run: bool, changes: List[Change], warnings: List[str]=None) -> None",372-381
+function,_remove_instructions,"def _remove_instructions(path: str, dry_run: bool, changes: List[Change], warnings: List[str]=None) -> None",384-404
+function,_instruction_paths,"def _instruction_paths(specs: Sequence[ClientSpec], selected: Sequence[str], mode: str) -> List[str]",407-423
+function,_repo_stats,"def _repo_stats(root: str, doc: Doc) -> dict",426-433
+function,_generate_repo,"def _generate_repo(root: str, dry_run: bool, changes: List[Change]) -> dict",436-456
+function,_ask,"def _ask(ask: Optional[Callable[[str], str]], prompt: str, default: str) -> str",459-463
+function,_ask_bool,"def _ask_bool(ask, prompt: str, default: bool) -> bool",466-468
+function,_ask_instructions,"def _ask_instructions(ask, default: str='both') -> str",471-473
+function,_interactive_clients,"def _interactive_clients(specs: Sequence[ClientSpec], selected: Sequence[str], ask, ui: UI) -> List[str]",476-503
+function,_summary,"def _summary(ui: UI, result: dict) -> None",506-540
+function,install,"def install(target: str='.', clients=None, *, yes: bool=False, dry_run: bool=False, uninstall: bool=False, repo: bool=True, hook: bool=True, instructions: str='both', interactive: Optional[bool]=None, home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, ask=None, ui: Optional[UI]=None, find_executable=None) -> dict",543-609
+function,_uninstall,"def _uninstall(root: str, specs: Sequence[ClientSpec], selected: Sequence[str], dry_run: bool, ui: UI) -> dict",612-638
+function,setup,"def setup(*args, **kwargs) -> dict",641-643
 > src-tier-models.py
 > src-tier-parser.py
 > src-tier-plugin.py
@@ -253,8 +252,8 @@ function,remember,"def remember(path: str, action: str, section: str='', title: 
   path src/tier/models.py
   language python
   lines 159
-  sha256 8260ad4d41fa524e
-  mtime 1577817001000000000
+  sha256 7e8da0f67b8029a8
+  mtime 1794543681347893164
   size 5470
 |symbols[13]{kind,name,signature,lines}
 function,_table_count,def _table_count(raw) -> int,23-28
@@ -300,20 +299,21 @@ function,_load,def _load(path: str) -> Doc,299-301
 = file
   path src/tier/pipe.py
   language python
-  lines 269
-  sha256 d004920ca25e8394
-  mtime 1577817001000000000
-  size 9811
-|symbols[9]{kind,name,signature,lines}
-function,detect_stream_format,def detect_stream_format(text: str) -> str,25-35
-function,_log_shape,def _log_shape(line: str) -> str,38-45
-function,log_doc,def log_doc(text: str) -> Doc,48-100
-function,from_stream,"def from_stream(text: str, fmt: str='auto') -> Doc",103-113
-function,_tokens,"def _tokens(text: str, fast: bool=None) -> int",116-117
-function,_fit_text,"def _fit_text(text: str, budget: int, fast: bool=None) -> str",120-149
-function,pipe_compress,"def pipe_compress(text: str, fmt: str='auto', max_tokens: int=None, out_path: str=None, fast: bool=None) -> str",152-204
-function,_text_fields,"def _text_fields(obj, prefix: str='', depth: int=0) -> list",207-219
-function,hook_process,"def hook_process(text: str, max_tokens: int=600, fmt: str='auto', exact: bool=False) -> dict",222-269
+  lines 321
+  sha256 450e27c52bdeb4ba
+  mtime 1794544128689329870
+  size 12322
+|symbols[10]{kind,name,signature,lines}
+function,detect_stream_format,def detect_stream_format(text: str) -> str,31-41
+function,_log_shape,def _log_shape(line: str) -> str,44-51
+function,log_doc,def log_doc(text: str) -> Doc,54-106
+function,from_stream,"def from_stream(text: str, fmt: str='auto') -> Doc",109-119
+function,_tokens,"def _tokens(text: str, fast: bool=None) -> int",122-123
+function,_fit_text,"def _fit_text(text: str, budget: int, fast: bool=None) -> str",126-155
+function,pipe_compress,"def pipe_compress(text: str, fmt: str='auto', max_tokens: int=None, out_path: str=None, fast: bool=None) -> str",158-210
+function,_text_fields,"def _text_fields(obj, prefix: str='', depth: int=0) -> list",213-225
+function,_probe_exact,def _probe_exact() -> bool,228-230
+function,hook_process,"def hook_process(text: str, max_tokens: int=600, fmt: str='auto', exact: bool=True) -> dict",233-321
 > src-tier-converter.py
 > src-tier-models.py
 > src-tier-parser.py
@@ -344,10 +344,10 @@ function,init_plugin,"def init_plugin(target_dir: str, convert_docs: bool=False,
 = file
   path src/tier/repo.py
   language python
-  lines 1299
-  sha256 5d5fc6fb8c69eafe
-  mtime 1577817001000000000
-  size 48556
+  lines 1317
+  sha256 54957c6944a6b9d2
+  mtime 1794543216269495514
+  size 49393
 |symbols[46]{kind,name,signature,lines}
 function,repo_source_files,"def repo_source_files(root: str, max_file_bytes: int=512 * 1024, max_files: int=2000)",32-65
 function,_repo_id,"def _repo_id(rel: str, used: set) -> str",68-78
@@ -383,18 +383,18 @@ function,_repo_add_deps,"def _repo_add_deps(info: dict, rel_set: set, module_to_
 function,_repo_section,"def _repo_section(info: dict, rel_to_id: dict) -> Section",788-810
 function,_repo_summary,"def _repo_summary(rels: list, lang_counts: dict, entries: list) -> str",813-818
 function,from_repo,"def from_repo(root: str, max_files: int=2000) -> Doc",821-860
-function,sync_repo,"def sync_repo(path: str, root: str=None, session: Session=None, session_key: str=None, write: bool=True) -> dict",863-1008
-function,_symbol_rows,def _symbol_rows(sec: Section) -> list,1011-1018
-function,_resolve_module,"def _resolve_module(doc: Doc, module: str)",1021-1033
-function,_slice_range,def _slice_range(text: str),1036-1044
-function,slice_symbols,"def slice_symbols(doc: Doc, module: str, symbols, root: str=None, context_lines: int=0, session: Session=None, session_key: str='', force: bool=False)",1047-1103
-function,_build_graph,def _build_graph(doc: Doc),1109-1122
-function,_reachable,"def _reachable(graph: dict, start: str) -> list",1125-1134
-function,_resolve_impact_target,"def _resolve_impact_target(doc: Doc, target: str) -> str",1137-1155
-function,_git_changed_paths,def _git_changed_paths(root: str),1158-1190
-function,_changed_symbols,"def _changed_symbols(old_rows: list, ext: str, text: str)",1193-1201
-function,impact,"def impact(doc: Doc, target: str, root: str=None, git: bool=False) -> dict",1204-1279
-function,render_impact,def render_impact(result: dict) -> str,1282-1299
+function,sync_repo,"def sync_repo(path: str, root: str=None, session: Session=None, session_key: str=None, write: bool=True, rehash: bool=False) -> dict",863-1026
+function,_symbol_rows,def _symbol_rows(sec: Section) -> list,1029-1036
+function,_resolve_module,"def _resolve_module(doc: Doc, module: str)",1039-1051
+function,_slice_range,def _slice_range(text: str),1054-1062
+function,slice_symbols,"def slice_symbols(doc: Doc, module: str, symbols, root: str=None, context_lines: int=0, session: Session=None, session_key: str='', force: bool=False)",1065-1121
+function,_build_graph,def _build_graph(doc: Doc),1127-1140
+function,_reachable,"def _reachable(graph: dict, start: str) -> list",1143-1152
+function,_resolve_impact_target,"def _resolve_impact_target(doc: Doc, target: str) -> str",1155-1173
+function,_git_changed_paths,def _git_changed_paths(root: str),1176-1208
+function,_changed_symbols,"def _changed_symbols(old_rows: list, ext: str, text: str)",1211-1219
+function,impact,"def impact(doc: Doc, target: str, root: str=None, git: bool=False) -> dict",1222-1297
+function,render_impact,def render_impact(result: dict) -> str,1300-1317
 > src-tier-converter.py
 > src-tier-models.py
 > src-tier-parser.py
@@ -405,9 +405,9 @@ function,render_impact,def render_impact(result: dict) -> str,1282-1299
   path src/tier/retrieval.py
   language python
   lines 380
-  sha256 b43d61434862572d
-  mtime 1577817001000000000
-  size 13631
+  sha256 d9fa1e3831817adf
+  mtime 1794543944745873113
+  size 13661
 |symbols[22]{kind,name,signature,lines}
 function,_norm,def _norm(w: str) -> str,54-61
 function,split_identifier,def split_identifier(token: str) -> list,64-83
@@ -417,7 +417,7 @@ function,_synonym_map,def _synonym_map() -> dict,103-113
 function,_trigrams,def _trigrams(s: str) -> set,119-123
 function,_trigram_sim,"def _trigram_sim(a: str, b: str) -> float",126-128
 function,_rule_count,def _rule_count(sec: Section) -> int,131-132
-function,index,"def index(doc: Doc, tokens: bool=True) -> str",135-152
+function,index,"def index(doc: Doc, tokens: bool=True, fast: bool=None) -> str",135-152
 function,resolve,"def resolve(doc: Doc, ids: list, follow: bool=False)",155-170
 function,get,"def get(doc: Doc, ids: list, follow: bool=False, table_mode: str='raw')",173-177
 class,Session,class Session,180-222
@@ -517,9 +517,9 @@ function,default_ui,"def default_ui(plain: bool=False, no_color: bool=False) -> 
   path src/tier/mcp/sdk_server.py
   language python
   lines 174
-  sha256 b350de4cb52df238
-  mtime 1577817001000000000
-  size 6442
+  sha256 945278dd6fca4858
+  mtime 1794543705580432368
+  size 6458
 |symbols[5]{kind,name,signature,lines}
 class,MissingSDKError,class MissingSDKError(RuntimeError),17-18
 function,_load_server_class,def _load_server_class(),21-34
@@ -533,21 +533,21 @@ function,main,def main(argv=None) -> int,133-163
 = file
   path src/tier/mcp/server.py
   language python
-  lines 457
-  sha256 37ee381ce8c18885
-  mtime 1577817001000000000
-  size 18967
+  lines 484
+  sha256 330add172f7ccf28
+  mtime 1794547406199726570
+  size 20054
 |symbols[10]{kind,name,signature,lines}
-function,safe,def safe(path: str) -> str,189-195
-function,safe_dir,def safe_dir(path: str) -> str,198-204
-function,safe_write,def safe_write(path: str) -> str,207-215
-function,load,def load(path: str) -> Doc,218-220
-function,_repo_signature,"def _repo_signature(p: str, doc: Doc) -> dict",223-243
-function,_signature_matches,def _signature_matches(sig: dict) -> bool,246-260
-function,_load_doc,"def _load_doc(path: str, auto_sync: bool=True)",263-287
-function,call,"def call(name: str, a: dict) -> str",290-400
-function,handle,def handle(msg: dict),403-434
-function,main,def main(),437-453
+function,safe,def safe(path: str) -> str,201-207
+function,safe_dir,def safe_dir(path: str) -> str,210-216
+function,safe_write,def safe_write(path: str) -> str,219-227
+function,load,def load(path: str) -> Doc,230-232
+function,_repo_signature,"def _repo_signature(p: str, doc: Doc) -> dict",235-255
+function,_signature_matches,def _signature_matches(sig: dict) -> bool,258-272
+function,_load_doc,"def _load_doc(path: str, auto_sync: bool=True)",275-299
+function,call,"def call(name: str, a: dict) -> str",302-413
+function,handle,def handle(msg: dict),416-447
+function,main,def main(),450-480
 > src-tier-lint.py
 > src-tier-memory.py
 > src-tier-models.py
@@ -561,17 +561,17 @@ function,main,def main(),437-453
 = file
   path tests/test_installer.py
   language python
-  lines 465
-  sha256 cd15c4f8fa0ca5bf
-  mtime 1577817001000000000
-  size 23034
+  lines 480
+  sha256 335eca5cad791b89
+  mtime 1794543802804740225
+  size 24024
 |symbols[28]{kind,name,signature,lines}
 function,_ui,def _ui(),22-23
 function,_put,"def _put(root, name, text)",26-31
 function,_read,def _read(path),34-36
 function,_which,def _which(name),39-46
 function,_snapshot,def _snapshot(root),49-57
-class,InstallerTests,class InstallerTests(unittest.TestCase),60-318
+class,InstallerTests,class InstallerTests(unittest.TestCase),60-333
 method,InstallerTests.test_client_paths_linux_macos_windows,def test_client_paths_linux_macos_windows(self),61-88
 method,InstallerTests.test_detection_and_invalid_config,def test_detection_and_invalid_config(self),90-102
 method,InstallerTests.test_server_entry_absolute_and_vscode_type,def test_server_entry_absolute_and_vscode_type(self),104-112
@@ -580,20 +580,20 @@ method,InstallerTests.test_install_is_idempotent,def test_install_is_idempotent(
 method,InstallerTests.test_dry_run_makes_no_mutations,def test_dry_run_makes_no_mutations(self),175-189
 method,InstallerTests.test_uninstall_removes_only_tier,def test_uninstall_removes_only_tier(self),191-210
 method,InstallerTests.test_no_repo_no_hook_no_instructions,def test_no_repo_no_hook_no_instructions(self),212-221
-method,InstallerTests.test_unbalanced_markers_backup_and_preserve_user_content,def test_unbalanced_markers_backup_and_preserve_user_content(self),223-253
-method,InstallerTests.test_orphan_end_marker_is_preserved,def test_orphan_end_marker_is_preserved(self),255-268
-method,InstallerTests.test_balanced_markers_replace_in_place,def test_balanced_markers_replace_in_place(self),270-288
-method,InstallerTests.test_setup_alias_cli,def test_setup_alias_cli(self),290-300
-method,InstallerTests.test_interactive_selection_and_yes_default,def test_interactive_selection_and_yes_default(self),302-318
-class,DoctorTests,class DoctorTests(unittest.TestCase),321-376
-method,DoctorTests._healthy,"def _healthy(self, root, home)",322-332
-method,DoctorTests.test_doctor_healthy_and_json,def test_doctor_healthy_and_json(self),334-345
-method,DoctorTests.test_doctor_cli,def test_doctor_cli(self),347-357
-method,DoctorTests.test_doctor_broken_config_and_stale_repo,def test_doctor_broken_config_and_stale_repo(self),359-376
-class,SDKAdapterTests,class SDKAdapterTests(unittest.TestCase),379-461
-method,SDKAdapterTests.test_v2_and_v1_loader_fallbacks,def test_v2_and_v1_loader_fallbacks(self),380-411
-method,SDKAdapterTests.test_missing_sdk_message,def test_missing_sdk_message(self),413-421
-method,SDKAdapterTests.test_all_eleven_tools_register_and_call,def test_all_eleven_tools_register_and_call(self),423-461
+method,InstallerTests.test_unbalanced_markers_backup_and_preserve_user_content,def test_unbalanced_markers_backup_and_preserve_user_content(self),223-261
+method,InstallerTests.test_orphan_end_marker_is_preserved,def test_orphan_end_marker_is_preserved(self),263-283
+method,InstallerTests.test_balanced_markers_replace_in_place,def test_balanced_markers_replace_in_place(self),285-303
+method,InstallerTests.test_setup_alias_cli,def test_setup_alias_cli(self),305-315
+method,InstallerTests.test_interactive_selection_and_yes_default,def test_interactive_selection_and_yes_default(self),317-333
+class,DoctorTests,class DoctorTests(unittest.TestCase),336-391
+method,DoctorTests._healthy,"def _healthy(self, root, home)",337-347
+method,DoctorTests.test_doctor_healthy_and_json,def test_doctor_healthy_and_json(self),349-360
+method,DoctorTests.test_doctor_cli,def test_doctor_cli(self),362-372
+method,DoctorTests.test_doctor_broken_config_and_stale_repo,def test_doctor_broken_config_and_stale_repo(self),374-391
+class,SDKAdapterTests,class SDKAdapterTests(unittest.TestCase),394-476
+method,SDKAdapterTests.test_v2_and_v1_loader_fallbacks,def test_v2_and_v1_loader_fallbacks(self),395-426
+method,SDKAdapterTests.test_missing_sdk_message,def test_missing_sdk_message(self),428-436
+method,SDKAdapterTests.test_all_eleven_tools_register_and_call,def test_all_eleven_tools_register_and_call(self),438-476
 > src-tier-__init__.py
 > src-tier-cli.py
 > src-tier-doctor.py
@@ -606,12 +606,12 @@ method,SDKAdapterTests.test_all_eleven_tools_register_and_call,def test_all_elev
 = file
   path tests/test_tier.py
   language python
-  lines 1781
-  sha256 0d28ee860303a149
-  mtime 1577817001000000000
-  size 86338
-|symbols[105]{kind,name,signature,lines}
-class,T,class T(unittest.TestCase),22-796
+  lines 1898
+  sha256 48211f87ea74ef81
+  mtime 1794547429202701686
+  size 92461
+|symbols[114]{kind,name,signature,lines}
+class,T,class T(unittest.TestCase),22-814
 method,T.rt,"def rt(self, text)",23-25
 method,T.read,"def read(self, name)",27-29
 method,T.put,"def put(self, root, name, text)",31-38
@@ -664,58 +664,67 @@ method,T.test_pipe_log_dedup_and_untrusted_guard,def test_pipe_log_dedup_and_unt
 method,T.test_pipe_budget_saves_artifact,def test_pipe_budget_saves_artifact(self),490-499
 method,T.test_init_plugin_merges_mcp_and_writes_repo,def test_init_plugin_merges_mcp_and_writes_repo(self),501-524
 method,T.test_hybrid_search_repo_symbols,def test_hybrid_search_repo_symbols(self),526-530
-method,T.test_mcp_tool_surface_and_repo,def test_mcp_tool_surface_and_repo(self),532-552
-method,T.test_slice_exact_lines_and_context,def test_slice_exact_lines_and_context(self),554-574
-method,T.test_slice_session_dedup_and_force,def test_slice_session_dedup_and_force(self),576-586
-method,T.test_slice_rejects_path_traversal,def test_slice_rejects_path_traversal(self),588-595
-method,T.test_sync_modified_updates_ranges_and_invalidates,def test_sync_modified_updates_ranges_and_invalidates(self),597-619
-method,T.test_sync_added_deleted_and_cleans_refs,def test_sync_added_deleted_and_cleans_refs(self),621-638
-method,T.test_sync_upgrades_old_repo_without_fingerprints,def test_sync_upgrades_old_repo_without_fingerprints(self),640-653
-method,T.test_impact_forward_reverse_and_symbol,def test_impact_forward_reverse_and_symbol(self),655-670
-method,T.test_impact_git_fallback_changed_symbols,def test_impact_git_fallback_changed_symbols(self),672-683
-method,T.test_hook_process_and_malformed,def test_hook_process_and_malformed(self),685-695
-method,T.test_hook_cli,def test_hook_cli(self),697-708
-method,T.test_init_plugin_hook_settings,def test_init_plugin_hook_settings(self),710-727
-method,T.test_pyproject_and_version_metadata,def test_pyproject_and_version_metadata(self),729-745
-method,T.test_mcp_slice_and_impact,def test_mcp_slice_and_impact(self),747-770
-method,T.test_mcp_auto_sync_on_get_and_slice,def test_mcp_auto_sync_on_get_and_slice(self),772-796
-function,_put,"def _put(root, name, text)",798-805
-function,_read,def _read(path),808-810
-function,_rows,"def _rows(doc, sid)",813-819
-class,_MCPClient,class _MCPClient,822-862
-method,_MCPClient.__init__,"def __init__(self, root)",823-829
-method,_MCPClient.request,"def request(self, method, params=None)",831-841
-method,_MCPClient.call,"def call(self, name, arguments)",843-846
-method,_MCPClient.close,def close(self),848-862
-class,Audit,class Audit(unittest.TestCase),865-1456
-method,Audit.test_guard_collision_fuzz,def test_guard_collision_fuzz(self),866-902
-method,Audit.test_path_traversal_and_symlinks,def test_path_traversal_and_symlinks(self),904-964
-method,Audit.test_parser_state_machine_robustness,def test_parser_state_machine_robustness(self),966-1017
-method,Audit.test_slice_boundaries_multilang,def test_slice_boundaries_multilang(self),1019-1146
-method,Audit.test_python_fallback_js_arrow_and_unreadable,def test_python_fallback_js_arrow_and_unreadable(self),1148-1180
-method,Audit.test_mcp_live_edit_and_session_eviction,def test_mcp_live_edit_and_session_eviction(self),1182-1266
-method,Audit.test_pipe_hook_stress_and_budget,def test_pipe_hook_stress_and_budget(self),1268-1315
-method,Audit.test_impact_git_subdir_and_sync_edges,def test_impact_git_subdir_and_sync_edges(self),1317-1366
-method,Audit.test_polyglot_track_h,def test_polyglot_track_h(self),1368-1402
-method,Audit.test_blind_retrieval_track_i,def test_blind_retrieval_track_i(self),1404-1440
-method,Audit.test_ranking_priors,def test_ranking_priors(self),1442-1456
-class,PerfAndSafety,class PerfAndSafety(unittest.TestCase),1459-1757
-method,PerfAndSafety.test_df_cache_matches_uncached_scoring,def test_df_cache_matches_uncached_scoring(self),1460-1478
-method,PerfAndSafety._reference_find,"def _reference_find(doc, weights, k)",1480-1550
-method,PerfAndSafety.test_norm_plural_rules,def test_norm_plural_rules(self),1552-1563
-method,PerfAndSafety.test_token_worker_and_cache_exactness,def test_token_worker_and_cache_exactness(self),1565-1588
-method,PerfAndSafety.test_count_server_worker_roundtrip,def test_count_server_worker_roundtrip(self),1590-1601
-method,PerfAndSafety.test_fit_text_single_pass_budget,def test_fit_text_single_pass_budget(self),1603-1616
-method,PerfAndSafety.test_hook_uses_fast_estimator_by_default,def test_hook_uses_fast_estimator_by_default(self),1618-1631
-method,PerfAndSafety.test_malformed_table_row_count_capped_with_warning,def test_malformed_table_row_count_capped_with_warning(self),1633-1648
-method,PerfAndSafety.test_huge_but_wellformed_row_count_still_bounded,def test_huge_but_wellformed_row_count_still_bounded(self),1650-1653
-method,PerfAndSafety.test_remember_bounds,def test_remember_bounds(self),1655-1670
-method,PerfAndSafety.test_sync_repo_stat_short_circuit,def test_sync_repo_stat_short_circuit(self),1672-1696
-method,PerfAndSafety.test_mcp_auto_sync_signature_cache,def test_mcp_auto_sync_signature_cache(self),1698-1732
-method,PerfAndSafety.test_mcp_list_batches_token_counting,def test_mcp_list_batches_token_counting(self),1734-1757
-function,self_read,def self_read(path),1760-1762
-function,shutil_which,def shutil_which(name),1765-1767
-function,_put,"def _put(root, name, text)",1770-1777
+method,T.test_mcp_help_and_version_flags,def test_mcp_help_and_version_flags(self),532-547
+method,T.test_mcp_tool_surface_and_repo,def test_mcp_tool_surface_and_repo(self),549-569
+method,T.test_slice_exact_lines_and_context,def test_slice_exact_lines_and_context(self),571-591
+method,T.test_slice_session_dedup_and_force,def test_slice_session_dedup_and_force(self),593-603
+method,T.test_slice_rejects_path_traversal,def test_slice_rejects_path_traversal(self),605-612
+method,T.test_sync_modified_updates_ranges_and_invalidates,def test_sync_modified_updates_ranges_and_invalidates(self),614-636
+method,T.test_sync_added_deleted_and_cleans_refs,def test_sync_added_deleted_and_cleans_refs(self),638-655
+method,T.test_sync_upgrades_old_repo_without_fingerprints,def test_sync_upgrades_old_repo_without_fingerprints(self),657-670
+method,T.test_impact_forward_reverse_and_symbol,def test_impact_forward_reverse_and_symbol(self),672-687
+method,T.test_impact_git_fallback_changed_symbols,def test_impact_git_fallback_changed_symbols(self),689-700
+method,T.test_hook_process_and_malformed,def test_hook_process_and_malformed(self),702-712
+method,T.test_hook_cli,def test_hook_cli(self),714-725
+method,T.test_init_plugin_hook_settings,def test_init_plugin_hook_settings(self),727-744
+method,T.test_pyproject_and_version_metadata,def test_pyproject_and_version_metadata(self),746-763
+method,T.test_mcp_slice_and_impact,def test_mcp_slice_and_impact(self),765-788
+method,T.test_mcp_auto_sync_on_get_and_slice,def test_mcp_auto_sync_on_get_and_slice(self),790-814
+function,_put,"def _put(root, name, text)",816-823
+function,_read,def _read(path),826-828
+function,_rows,"def _rows(doc, sid)",831-837
+class,_MCPClient,class _MCPClient,840-880
+method,_MCPClient.__init__,"def __init__(self, root)",841-847
+method,_MCPClient.request,"def request(self, method, params=None)",849-859
+method,_MCPClient.call,"def call(self, name, arguments)",861-864
+method,_MCPClient.close,def close(self),866-880
+class,Audit,class Audit(unittest.TestCase),883-1474
+method,Audit.test_guard_collision_fuzz,def test_guard_collision_fuzz(self),884-920
+method,Audit.test_path_traversal_and_symlinks,def test_path_traversal_and_symlinks(self),922-982
+method,Audit.test_parser_state_machine_robustness,def test_parser_state_machine_robustness(self),984-1035
+method,Audit.test_slice_boundaries_multilang,def test_slice_boundaries_multilang(self),1037-1164
+method,Audit.test_python_fallback_js_arrow_and_unreadable,def test_python_fallback_js_arrow_and_unreadable(self),1166-1198
+method,Audit.test_mcp_live_edit_and_session_eviction,def test_mcp_live_edit_and_session_eviction(self),1200-1284
+method,Audit.test_pipe_hook_stress_and_budget,def test_pipe_hook_stress_and_budget(self),1286-1333
+method,Audit.test_impact_git_subdir_and_sync_edges,def test_impact_git_subdir_and_sync_edges(self),1335-1384
+method,Audit.test_polyglot_track_h,def test_polyglot_track_h(self),1386-1420
+method,Audit.test_blind_retrieval_track_i,def test_blind_retrieval_track_i(self),1422-1458
+method,Audit.test_ranking_priors,def test_ranking_priors(self),1460-1474
+class,PerfAndSafety,class PerfAndSafety(unittest.TestCase),1477-1874
+method,PerfAndSafety.test_df_cache_matches_uncached_scoring,def test_df_cache_matches_uncached_scoring(self),1478-1496
+method,PerfAndSafety._reference_find,"def _reference_find(doc, weights, k)",1498-1568
+method,PerfAndSafety.test_norm_plural_rules,def test_norm_plural_rules(self),1570-1581
+method,PerfAndSafety.test_token_worker_and_cache_exactness,def test_token_worker_and_cache_exactness(self),1583-1606
+method,PerfAndSafety.test_count_server_worker_roundtrip,def test_count_server_worker_roundtrip(self),1608-1619
+method,PerfAndSafety.test_fit_text_single_pass_budget,def test_fit_text_single_pass_budget(self),1621-1634
+method,PerfAndSafety.test_hook_without_exact_backend_stays_within_budget,def test_hook_without_exact_backend_stays_within_budget(self),1636-1649
+method,PerfAndSafety.test_hook_budget_is_exact_not_estimated,def test_hook_budget_is_exact_not_estimated(self),1651-1667
+method,PerfAndSafety.test_hook_passes_through_only_when_provably_small,def test_hook_passes_through_only_when_provably_small(self),1669-1673
+method,PerfAndSafety.test_hook_reports_counting_mode,def test_hook_reports_counting_mode(self),1675-1680
+method,PerfAndSafety.test_hook_fast_mode_is_biased_safe,def test_hook_fast_mode_is_biased_safe(self),1682-1688
+method,PerfAndSafety.test_malformed_table_row_count_capped_with_warning,def test_malformed_table_row_count_capped_with_warning(self),1690-1705
+method,PerfAndSafety.test_huge_but_wellformed_row_count_still_bounded,def test_huge_but_wellformed_row_count_still_bounded(self),1707-1710
+method,PerfAndSafety.test_sync_detects_same_size_edit_with_restored_mtime,def test_sync_detects_same_size_edit_with_restored_mtime(self),1712-1730
+method,PerfAndSafety.test_sync_rehash_flag_catches_what_stat_cache_misses,def test_sync_rehash_flag_catches_what_stat_cache_misses(self),1732-1742
+method,PerfAndSafety.test_sync_mtime_cache_heals_when_recorded_mtime_predates_map,def test_sync_mtime_cache_heals_when_recorded_mtime_predates_map(self),1744-1761
+method,PerfAndSafety.test_sync_rehash_keeps_clean_tree_clean,def test_sync_rehash_keeps_clean_tree_clean(self),1763-1770
+method,PerfAndSafety.test_remember_bounds,def test_remember_bounds(self),1772-1787
+method,PerfAndSafety.test_sync_repo_stat_short_circuit,def test_sync_repo_stat_short_circuit(self),1789-1813
+method,PerfAndSafety.test_mcp_auto_sync_signature_cache,def test_mcp_auto_sync_signature_cache(self),1815-1849
+method,PerfAndSafety.test_mcp_list_batches_token_counting,def test_mcp_list_batches_token_counting(self),1851-1874
+function,self_read,def self_read(path),1877-1879
+function,shutil_which,def shutil_which(name),1882-1884
+function,_put,"def _put(root, name, text)",1887-1894
 > src-tier-__init__.py
 > src-tier-mcp-__init__.py
 > src-tier-mcp-server.py

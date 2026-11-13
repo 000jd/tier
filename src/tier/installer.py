@@ -309,24 +309,43 @@ def _remove_hook(path: str, dry_run: bool, changes: List[Change]) -> None:
 
 
 def _marker_span(existing: str):
-    """Return (begin, end) offsets of a well-formed TIER block, or None.
+    """Return (begin, end) offsets of the last well-formed TIER block, or None.
 
-    A block is well-formed only when exactly one BEGIN precedes exactly one END
-    and nothing of either marker kind appears outside that span.
+    Unmatched markers elsewhere in the file are ignored: TIER only ever edits
+    the block it wrote, so a stray marker in user prose must not stop us from
+    removing or replacing our own block.
     """
-    begins = existing.count(TIER_BEGIN)
-    ends = existing.count(TIER_END)
-    if begins != 1 or ends != 1:
+    end = existing.rfind(TIER_END)
+    if end < 0:
         return None
-    begin = existing.find(TIER_BEGIN)
-    end = existing.find(TIER_END)
-    if end < begin:
+    begin = existing.rfind(TIER_BEGIN, 0, end)
+    if begin < 0:
         return None
     return begin, end
 
 
 def markers_balanced(text: str) -> bool:
-    return _marker_span(text) is not None or (TIER_BEGIN not in text and TIER_END not in text)
+    """True when every TIER marker in the file is part of a well-formed block."""
+    begins = text.count(TIER_BEGIN)
+    ends = text.count(TIER_END)
+    if not begins and not ends:
+        return True
+    if begins != ends:
+        return False
+    pos, depth = 0, 0
+    while True:
+        b = text.find(TIER_BEGIN, pos)
+        e = text.find(TIER_END, pos)
+        if b < 0 and e < 0:
+            return depth == 0
+        if b >= 0 and (e < 0 or b < e):
+            if depth:
+                return False
+            depth, pos = 1, b + len(TIER_BEGIN)
+        else:
+            if not depth:
+                return False
+            depth, pos = 0, e + len(TIER_END)
 
 
 def _marked_text(existing: str, block: str) -> str:
@@ -339,15 +358,6 @@ def _marked_text(existing: str, block: str) -> str:
     if existing.strip():
         return existing.rstrip() + "\n\n" + marked
     return marked
-
-
-def _strip_marked(existing: str) -> str:
-    span = _marker_span(existing)
-    if span is None:
-        return existing
-    before = existing[: span[0]]
-    after = existing[span[1] + len(TIER_END):].lstrip("\n")
-    return (before.rstrip() + ("\n" if after else "") + after).rstrip() + "\n"
 
 
 def _generic_instructions() -> str:
@@ -365,8 +375,8 @@ def _write_instructions(path: str, block: str, dry_run: bool, changes: List[Chan
     if existing and not markers_balanced(existing):
         if warnings is not None:
             warnings.append(
-                f"{path}: unbalanced TIER:BEGIN/TIER:END markers; existing content preserved "
-                "and the TIER block appended after it"
+                f"{path}: unbalanced TIER:BEGIN/TIER:END markers in user text; "
+                "user content preserved, only TIER's own block was touched"
             )
     _save_text(path, _marked_text(existing, block), dry_run, changes, backup=True)
 
@@ -376,13 +386,22 @@ def _remove_instructions(path: str, dry_run: bool, changes: List[Change],
     if not os.path.exists(path):
         return
     existing = _read_text(path)
-    if existing and not markers_balanced(existing):
-        if warnings is not None:
-            warnings.append(
-                f"{path}: unbalanced TIER:BEGIN/TIER:END markers; file left untouched"
-            )
+    span = _marker_span(existing)
+    if span is None:
+        if existing and (TIER_BEGIN in existing or TIER_END in existing):
+            if warnings is not None:
+                warnings.append(
+                    f"{path}: no complete TIER:BEGIN/TIER:END block to remove; file left untouched"
+                )
         return
-    _save_text(path, _strip_marked(existing), dry_run, changes, backup=True)
+    before = existing[: span[0]]
+    after = existing[span[1] + len(TIER_END):].lstrip("\n")
+    stripped = (before.rstrip() + ("\n" if after else "") + after).rstrip() + "\n"
+    if not markers_balanced(existing) and warnings is not None:
+        warnings.append(
+            f"{path}: unbalanced TIER markers in user text; removed only TIER's own block"
+        )
+    _save_text(path, stripped, dry_run, changes, backup=True)
 
 
 def _instruction_paths(specs: Sequence[ClientSpec], selected: Sequence[str], mode: str) -> List[str]:
@@ -537,7 +556,7 @@ def install(target: str = ".", clients=None, *, yes: bool = False, dry_run: bool
         selected = parse_clients(clients, specs) if clients is not None else [s.id for s in specs]
         return _uninstall(root, specs, selected, dry_run, ui)
     ui.header(f"TIER v{VERSION} — MCP & Agent Installer",
-              "Zero-dependency core; optional extras: tier[ui], tier[mcp]")
+              "Zero-dependency core; optional extras: tier-ctx[ui], tier-ctx[mcp]")
     if interactive is None:
         interactive = clients is None and not yes and sys.stdin.isatty() and sys.stdout.isatty()
     if interactive:

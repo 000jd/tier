@@ -1,5 +1,5 @@
-%tier 1.0.0
-%title TIER v1.0.0
+%tier 1.0.1
+%title TIER v1.0.1
 %sum TIER (Tiered Information for Efficient Retrieval) is a line-oriented text format plus a local context, memory, and code-navigation engine for AI agents.
 File extension: `.tier`. Encoding: UTF-8, LF line endings. The reference implementation is a Python 3.10+ package in a `src/` layout and uses the standard library only.
 @package-layout Package layout
@@ -58,7 +58,7 @@ A key/value block ends at the first line that is not indented. All scalars are s
 @document-shape Document shape
 ? code block
 ```
-%tier 1.0.0
+%tier 1.0.1
 %title Payments API Runbook
 %sum Deploying, operating, and debugging the payments API
 %rule Never log card numbers
@@ -128,7 +128,7 @@ def parse(text: str) -> Doc:
 - Unchanged modules keep their existing section bodies.
 - Changed and deleted section ids are evicted from the active `Session`, including all `section#symbol` L3 slice entries.
 - `%sum` is refreshed with the current file count, languages, and entrypoints.
-Before reading or hashing a source file, `sync` compares its current `mtime` and `size` with the recorded fingerprint; when both match, the file is not read at all. `tier.sync_repo()` returns changed, added, deleted, and unchanged lists. Writing is atomic and skipped when nothing changed. The MCP server auto-syncs a repository map before `tier_index`, `tier_find`, `tier_get`, and `tier_slice`, and exposes `tier_sync` explicitly; repeat reads within a short window reuse the last parsed doc when the recorded file and directory stats are unchanged.
+Before reading or hashing a source file, `sync` compares its current `mtime` and `size` with the recorded fingerprint; when both match — and the recorded `mtime` is not newer than `repo.tier` itself — the file is not read at all. That shortcut is a cache, never the source of truth: `tier sync --rehash` (MCP `tier_sync {rehash: true}`) ignores it and compares content hashes, which is required after `rsync -a`, `cp -p`, or a `tar` extraction that restores timestamps and can hide a same-size edit. The stored `sha256` remains authoritative. `tier.sync_repo()` returns changed, added, deleted, and unchanged lists. Writing is atomic and skipped when nothing changed. The MCP server auto-syncs a repository map before `tier_index`, `tier_find`, `tier_get`, and `tier_slice`, and exposes `tier_sync` explicitly; repeat reads within a short window reuse the last parsed doc when the recorded file and directory stats are unchanged.
 @impact-analysis Impact analysis
 ? `tier impact repo.tier TARGET` inverts the `>` graph:
 - Direct dependents: sections that reference the target.
@@ -159,7 +159,7 @@ It finds the largest text field in `tool_response`, `tool_input`, `stdout`, `std
 ```json
 {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "TIER compressed ..."}}
 ```
-Small payloads return `{"continue": true}`. Malformed JSON is treated as a raw tool-response string, so the hook never crashes; a short malformed payload simply continues. The hook scores candidates with the deterministic characters/4 estimator by default so every tool call stays fast; pass `exact=True` to `hook_process` when BPE counts are required.
+Small payloads return `{"continue": true}`. Malformed JSON is treated as a raw tool-response string, so the hook never crashes; a short malformed payload simply continues. The token budget is a contract, so the hook decides with exact counts: a payload is skipped only when it is provably within budget (it is no longer than the budget in characters, since a token is at least one character), otherwise the persistent tokenizer counts it exactly and the emitted context is verified before it is returned. A characters/4 estimate may only make the safe pass-through decision, scaled by the rigorous 4x bound; measured underestimation on dense JSON and minified code reaches 2.34x, so an estimator-gated decision would pass through payloads well over the cap. `hook_process(..., exact=False)` and `tier hook --fast` opt into estimator-only counting, which is best-effort and reports `estimated, best-effort` in `systemMessage`. The default path reports `exact counts`.
 @agent-plugin-bootstrap Agent plugin bootstrap
 ? `tier init-plugin TARGET` configures a project in one step:
 1. Safely merges a `tier` server entry into `TARGET/.mcp.json` without removing other servers. The entry runs `python -m tier.mcp` with the target directory as its root.
@@ -176,11 +176,11 @@ The installer prefers an absolute `tier-mcp` executable and otherwise uses the a
 ? `tier doctor [ROOT]` checks Python version, `tier`/`tier-mcp` entrypoints, optional...
 `tier doctor [ROOT]` checks Python version, `tier`/`tier-mcp` entrypoints, optional Node/`gpt-tokenizer` availability, the target directory, `repo.tier` presence, lint errors, sync freshness, detected client configs (command and root validity), TIER hooks, and the optional `mcp` extra. It renders a PASS/WARN/FAIL table; `--json` emits machine-readable checks. The exit code is nonzero only when a check fails.
 @optional-official-sdk Optional official SDK adapter
-? `pip install "tier[mcp]"` enables `tier-mcp-sdk` and `python -m tier.mcp.sdk_server`.
+? `pip install "tier-ctx[mcp]"` enables `tier-mcp-sdk` and `python -m tier.mcp.sdk_server`.
 The adapter wraps all 11 tools with the official SDK's v2 `MCPServer` (falling back to v1 `FastMCP`). It supports `--transport stdio`, `--transport streamable-http --host HOST --port PORT`, and `mcp dev` via the module-level `mcp`/`server` object. If the extra is missing, it prints the exact install command and exits nonzero without a traceback. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib implementation.
 @packaging Packaging
-? `pyproject.toml` declares the standard-library package at version `1.0.0` with no required...
-`pyproject.toml` declares the standard-library package at version `1.0.0` with no required third-party dependencies and three console scripts:
+? `pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package...
+`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.0.1` with no required third-party dependencies and three console scripts:
 |packaging[3]{Command,Entry point}
 `tier`,`tier.cli:main`
 `tier-mcp`,`tier.mcp.server:main`
@@ -215,7 +215,7 @@ It exposes eleven tools:
 `tier_repo`,index a repository directory into TIER
 `tier_remember`,"persist rules, sections, keys, and references"
 Paths are confined to the configured root. `tier_get` and `tier_slice` share a session cache; `tier_sync` and any auto-sync invalidate changed sections and L3 slice entries.
-With `tier[mcp]`, `tier-mcp-sdk` / `python -m tier.mcp.sdk_server` exposes the same 11 tools through the official SDK for MCP Inspector (`mcp dev`) and Streamable HTTP. The default server remains the stdlib JSON-RPC implementation.
+With `tier-ctx[mcp]`, `tier-mcp-sdk` / `python -m tier.mcp.sdk_server` exposes the same 11 tools through the official SDK for MCP Inspector (`mcp dev`) and Streamable HTTP. The default server remains the stdlib JSON-RPC implementation.
 @author-guidelines Author guidelines
 ? items: Write abstracts as the answer to "when should I read this?", not as a copy of the first sentence.; Put only hard constraints in...
 - Write abstracts as the answer to "when should I read this?", not as a copy of the first sentence.
@@ -239,7 +239,7 @@ With `tier[mcp]`, `tier-mcp-sdk` / `python -m tier.mcp.sdk_server` exposes the s
 The reference converter maps headings to sections, Markdown tables to `|` tables, single-line shell fences to `$`, and top-level bullets that start with Never, Always, Must, Do not, Don't, or Only to `!` rules. It tracks heading levels 2 through 6 and injects parent-to-child `>` references. It synthesizes abstracts for prose, rules, key/value trees, commands, reference hubs, tables, code blocks, and lists, and moves a short first prose sentence into the abstract. Known losses: code-fence language labels on one-line shell blocks.
 @benchmarks Benchmarks
 ? See `benchmarks/BENCH.txt` for the full A-I output.
-TIER v1.0.0 measures:
+TIER v1.0.1 measures:
 - A/B: TIER tables match CSV at about 61 percent fewer tokens than pretty JSON. TIER key/value is 39 percent below pretty JSON and 13 percent below YAML; compact JSON is still smaller.
 - C: 8/8 `hit@1` on the payments runbook, 352-token L0 index, and L0 + top-1 + session dedup below full Markdown at all eight questions.
 - D: five real GitHub documents convert, lint, and round-trip cleanly, with 99.2-100% word recall.
@@ -250,8 +250,8 @@ TIER v1.0.0 measures:
 - Self-index: the checked-in `repo.tier` maps 24 source files (20 package modules plus two test files, the benchmark runner, and the JS token counter) in 11,034 tokens; its L0 index is 893 tokens (8 percent).
 - I: a 197-section merged corpus returns 15/15 `hit@1` and 15/15 `hit@2` on 15 mixed queries; the mean top-1 fetch is 134 tokens, and L0 + top-1 averages 6,039 tokens versus 52,275 for full-corpus loading (88 percent fewer).
 @backward-compatibility Backward compatibility
-? TIER v1.0.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table...
-TIER v1.0.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.0.0`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable.
+? TIER v1.0.1 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table...
+TIER v1.0.1 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.0.1`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable.
 @non-goals Non-goals
 ? TIER is not a replacement for JSON as a wire format or for databases.
 It does not define a schema language, and it does not claim to improve answer accuracy: that must be measured per model and task. The JS/TS/Go/Rust symbol extractors are lightweight regex scanners, not full language parsers.

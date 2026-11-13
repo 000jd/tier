@@ -31,7 +31,10 @@ def main(argv=None):
         sys.stdout.reconfigure(errors="replace")
     except (AttributeError, ValueError):
         pass
+    from .models import VERSION as _VERSION
+
     ap = argparse.ArgumentParser(prog="tier", description=__doc__.split("\n")[0])
+    ap.add_argument("-V", "--version", action="version", version=f"tier {_VERSION}")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("index", help="L0+L1: title, summary, rules, section index")
     p.add_argument("file")
@@ -114,6 +117,8 @@ def main(argv=None):
     p.add_argument("file")
     p.add_argument("--root")
     p.add_argument("--no-write", action="store_true")
+    p.add_argument("--rehash", action="store_true",
+                   help="ignore the mtime+size fast path and compare content hashes")
     p = sub.add_parser("impact", help="reverse dependency and blast-radius analysis")
     p.add_argument("file")
     p.add_argument("target")
@@ -122,8 +127,9 @@ def main(argv=None):
     p = sub.add_parser("hook", help="Claude Code-style JSON hook filter on stdin")
     p.add_argument("--max-tokens", type=int, default=600)
     p.add_argument("--format", choices=["auto", "json", "md", "log"], default="auto")
-    p.add_argument("--exact", action="store_true",
-                   help="use exact o200k BPE counts instead of the fast estimator")
+    p.add_argument("--fast", action="store_true",
+                   help="use the chars/4 estimator instead of exact o200k counts "
+                        "(faster, but the token budget becomes best-effort)")
     p = sub.add_parser("to-md")
     p.add_argument("file")
     p = sub.add_parser("to-json")
@@ -268,7 +274,7 @@ def main(argv=None):
 
     if a.cmd == "sync":
         try:
-            res = sync_repo(a.file, root=a.root, write=not a.no_write)
+            res = sync_repo(a.file, root=a.root, write=not a.no_write, rehash=a.rehash)
         except (OSError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
@@ -295,7 +301,7 @@ def main(argv=None):
 
     if a.cmd == "hook":
         try:
-            response = hook_process(_stdin_text(), a.max_tokens, a.format, exact=a.exact)
+            response = hook_process(_stdin_text(), a.max_tokens, a.format, exact=not a.fast)
         except Exception as e:
             response = {"continue": True, "systemMessage": f"tier hook error: {e}"}
         print(json.dumps(response, ensure_ascii=False))

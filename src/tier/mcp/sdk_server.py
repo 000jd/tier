@@ -1,7 +1,7 @@
 """Optional official MCP SDK adapter for TIER.
 
 The default `tier-mcp` / `python -m tier.mcp` server is the zero-dependency stdlib
-JSON-RPC implementation. This module is for users who install `tier[mcp]` and want
+JSON-RPC implementation. This module is for users who install `tier-ctx[mcp]` and want
 the official SDK, MCP Inspector (`mcp dev`), or Streamable HTTP.
 """
 from __future__ import annotations
@@ -51,7 +51,7 @@ def build_server(root: str = ".", server_cls=None, server_name: str = "tier"):
     if server_cls is None:
         raise MissingSDKError(
             'the official mcp SDK is required for this adapter; '
-            'install it with: pip install "tier[mcp]"'
+            'install it with: pip install "tier-ctx[mcp]"'
         )
     stdio.ROOT = root
     stdio.SESSION.reset()
@@ -133,7 +133,7 @@ def build_server(root: str = ".", server_cls=None, server_name: str = "tier"):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="tier-mcp-sdk",
-        description="Official-SDK MCP server for TIER (requires the tier[mcp] extra).",
+        description="Official-SDK MCP server for TIER (requires the tier-ctx[mcp] extra).",
     )
     ap.add_argument("root", nargs="?", default=".", help="docs/repository root")
     ap.add_argument("--root", dest="root_opt", default=None, help="docs/repository root")
@@ -145,7 +145,7 @@ def main(argv=None) -> int:
         srv = build_server(a.root_opt or a.root)
     except MissingSDKError as e:
         print(f"error: {e}", file=sys.stderr)
-        print('hint: pip install "tier[mcp]"', file=sys.stderr)
+        print('hint: pip install "tier-ctx[mcp]"', file=sys.stderr)
         return 1
     except (OSError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)

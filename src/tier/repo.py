@@ -861,8 +861,14 @@ def from_repo(root: str, max_files: int = 2000) -> Doc:
 
 
 def sync_repo(path: str, root: str = None, session: Session = None,
-              session_key: str = None, write: bool = True) -> dict:
-    """Incrementally refresh a repo.tier from disk, preserving unchanged sections."""
+              session_key: str = None, write: bool = True, rehash: bool = False) -> dict:
+    """Incrementally refresh a repo.tier from disk, preserving unchanged sections.
+
+    Files whose recorded `mtime` and `size` still match are not re-read: that is
+    a cache, not the source of truth. `rehash=True` ignores the cache and
+    compares content hashes for every file, which catches same-size edits with
+    a restored timestamp (rsync -a, cp -p, tar extraction).
+    """
     path = os.path.abspath(path)
     root = os.path.abspath(root or os.path.dirname(path) or ".")
     if not os.path.isdir(root):
@@ -876,6 +882,10 @@ def sync_repo(path: str, root: str = None, session: Session = None,
         if meta and meta.get("path"):
             existing[meta["path"]] = sec
             existing_order.append(meta["path"])
+    try:
+        map_mtime = os.stat(path).st_mtime_ns
+    except OSError:
+        map_mtime = 0
     files = repo_source_files(root)
     current = {}
     for rel, full, ext in files:
@@ -886,12 +896,20 @@ def sync_repo(path: str, root: str = None, session: Session = None,
             stat_mtime, stat_size = st.st_mtime_ns, st.st_size
         except OSError:
             stat_mtime, stat_size = 0, -1
-        if (
-            old is not None
+        recorded_mtime = str(meta.get("mtime", ""))
+        trust_stat = (
+            not rehash
+            and old is not None
             and meta.get("sha256")
-            and str(meta.get("mtime", "")) == str(stat_mtime)
+            and recorded_mtime == str(stat_mtime)
             and str(meta.get("size", "")) == str(stat_size)
-        ):
+            # A file touched before the map was written cannot have changed
+            # without also having a newer mtime, so the cache is only trusted
+            # when the recorded mtime is at or before the map's own mtime.
+            and recorded_mtime.isdigit()
+            and int(recorded_mtime) <= map_mtime
+        )
+        if trust_stat:
             current[rel] = {
                 "full": full, "ext": ext, "text": None, "sha256": meta["sha256"],
                 "unchanged": True,

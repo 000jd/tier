@@ -250,7 +250,15 @@ class InstallerTests(unittest.TestCase):
             installer.install(root, clients=["claude-code"], uninstall=True, yes=True,
                               home=home, env={}, platform="linux", ui=_ui())
             uninstalled = _read(os.path.join(root, "CLAUDE.md"))
-            self.assertEqual(uninstalled, after)
+            # The user's stray BEGIN is their own content and must survive, but
+            # TIER's complete block (and therefore its END marker) must be gone.
+            self.assertEqual(uninstalled.count(tier.TIER_BEGIN), 1)
+            self.assertNotIn(tier.TIER_END, uninstalled)
+            self.assertNotIn("L0 repository index", uninstalled)
+            self.assertIn("stale TIER block that never closes", uninstalled)
+            self.assertIn("Keep this paragraph intact.", uninstalled)
+            self.assertIn("## Later user notes", uninstalled)
+            self.assertIn("Do not lose this either.", uninstalled)
 
     def test_orphan_end_marker_is_preserved(self):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
@@ -266,6 +274,13 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue(text.startswith(original.rstrip("\n")))
             self.assertIn(tier.TIER_BEGIN, text)
             self.assertTrue(any("unbalanced" in w for w in result["warnings"]))
+            installer.install(root, clients=["claude-code"], uninstall=True, yes=True,
+                              home=home, env={}, platform="linux", ui=_ui())
+            after = _read(os.path.join(root, "AGENTS.md"))
+            self.assertNotIn(tier.TIER_BEGIN, after)
+            self.assertIn(tier.TIER_END, after)
+            self.assertIn("Intro", after)
+            self.assertIn("Outro", after)
 
     def test_balanced_markers_replace_in_place(self):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
@@ -418,7 +433,7 @@ class SDKAdapterTests(unittest.TestCase):
             with redirect_stderr(stderr):
                 code = sdk_server.main(["--root", tempfile.gettempdir()])
         self.assertEqual(code, 1)
-        self.assertIn('pip install "tier[mcp]"', stderr.getvalue())
+        self.assertIn('pip install "tier-ctx[mcp]"', stderr.getvalue())
 
     def test_all_eleven_tools_register_and_call(self):
         from tier.mcp import sdk_server

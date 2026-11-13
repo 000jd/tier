@@ -37,3 +37,6 @@ Thumbs.db
 tier-pipe-*.tier
 .tier-*.tmp
 *.tier.tmp
+
+# Local tooling scratch
+.commandcode/

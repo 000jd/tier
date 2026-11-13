@@ -169,7 +169,7 @@ def run_doctor(root: str = ".", home: Optional[str] = None, env: Optional[dict] 
     if importlib.util.find_spec("mcp") is not None:
         checks.append(Check("mcp extra", "PASS", "official mcp SDK installed (SDK adapter available)"))
     else:
-        checks.append(Check("mcp extra", "INFO", 'optional; install with `pip install "tier[mcp]"`'))
+        checks.append(Check("mcp extra", "INFO", 'optional; install with `pip install "tier-ctx[mcp]"`'))
     return checks
 
 

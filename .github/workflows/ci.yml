@@ -47,6 +47,7 @@ jobs:
         shell: bash
         run: |
           tier sync repo.tier
+          tier sync repo.tier --rehash
           if ! git diff --exit-code -- repo.tier; then
             echo "::error file=repo.tier::repo.tier is stale. Run 'tier from-repo . -o repo.tier' and commit the result."
             exit 1
