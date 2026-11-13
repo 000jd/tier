@@ -43,11 +43,74 @@ def cache_root() -> str:
     return os.path.join(os.path.expanduser("~"), ".cache", "tier")
 
 
+def _git_pointer(root: str) -> str:
+    """Resolve a `.git` pointer file (git worktree, submodule) to its gitdir.
+
+    Returns "" when `.git` is absent, is a directory, or the pointer is
+    unreadable. A relative target is resolved against the directory containing
+    `.git`, which is what Git itself does.
+    """
+    dot_git = os.path.join(root, ".git")
+    if not os.path.isfile(dot_git):
+        return ""
+    try:
+        with open(dot_git, encoding="utf-8", errors="replace") as f:
+            first = f.readline().strip()
+    except OSError:
+        return ""
+    if not first.lower().startswith("gitdir:"):
+        return ""
+    target = first.split(":", 1)[1].strip()
+    if not target:
+        return ""
+    if not os.path.isabs(target):
+        target = os.path.join(os.path.dirname(dot_git), target)
+    return os.path.abspath(target)
+
+
+def _common_git_dir(git_dir: str) -> str:
+    """Return the shared git directory for a per-worktree admin directory.
+
+    A linked worktree's gitdir contains a `commondir` file pointing at the main
+    repository's `.git`. Using it means every worktree of one repository shares
+    a single map instead of one per checkout.
+    """
+    if not git_dir:
+        return ""
+    marker = os.path.join(git_dir, "commondir")
+    if not os.path.isfile(marker):
+        return git_dir
+    try:
+        with open(marker, encoding="utf-8", errors="replace") as f:
+            target = f.read().strip()
+    except OSError:
+        return git_dir
+    if not target:
+        return git_dir
+    if not os.path.isabs(target):
+        target = os.path.join(git_dir, target)
+    return os.path.abspath(target)
+
+
 def _git_dir(root: str) -> str:
-    """Return the git metadata directory for `root`, or "" when not a worktree."""
+    """Return the git metadata directory for `root`, or "" when not a repository.
+
+    Handles both layouts: a plain `.git` directory, and a `.git` pointer file as
+    used by `git worktree` and submodules.
+
+    A linked worktree's pointer targets its own admin directory under
+    `<main>/.git/worktrees/<name>`, and a submodule's targets
+    `<super>/.git/modules/<name>`. Those per-checkout directories are used as
+    given rather than resolved to the shared common directory: worktrees exist
+    to hold different branches, so one shared map would be invalidated on every
+    checkout switch and could serve stale content.
+    """
     dot_git = os.path.join(root, ".git")
     if os.path.isdir(dot_git):
-        return dot_git
+        return _common_git_dir(dot_git)
+    pointer = _git_pointer(root)
+    if pointer:
+        return pointer or _common_git_dir(pointer)
     return ""
 
 
@@ -85,7 +148,10 @@ def cache_kind(path: str, root: str) -> str:
     tracked = os.path.join(os.path.abspath(root), CACHE_FILENAME)
     if path == tracked:
         return "tracked"
-    if os.sep + os.path.join(".git", "info") + os.sep in path:
+    # Match on the `info/tier` segment rather than a literal `.git`: a linked
+    # worktree's gitdir lives outside the checkout entirely.
+    norm = path.replace(os.sep, "/")
+    if "/info/tier/" in norm:
         return "git"
     return "cache"
 
@@ -94,7 +160,7 @@ def is_cache_dir(path: str, root: str = "") -> bool:
     """True when `path` is a directory this module owns (so listings skip it)."""
     path = os.path.abspath(path)
     parts = path.replace(os.sep, "/").split("/")
-    if ".git/info/tier" in "/".join(parts):
+    if ".git/info/tier" in "/".join(parts) or "/info/tier" in "/".join(parts):
         return True
     roots = {os.path.abspath(cache_root())}
     digest_dir = os.path.dirname(cache_path(root)) if root else ""
@@ -106,15 +172,12 @@ def is_cache_dir(path: str, root: str = "") -> bool:
 def _work_root_for(path: str, hint: str = "") -> str:
     """Infer the repository a map describes when it lives outside that repo.
 
-    An invisible cache sits under `<git>/info/tier/` or `<cache_root>/<digest>/`,
-    neither of which contains the sources, so the owning root is recovered from
-    the git metadata path or from the digest directory's manifest.
+    An invisible cache sits under `<gitdir>/info/tier/` or
+    `<cache_root>/<digest>/`, neither of which contains the sources. The owning
+    root is recovered from the `.owner` manifest written beside the map; the
+    literal `/.git/info/tier/` path is still handled for older maps.
     """
     path = os.path.abspath(path)
-    norm = path.replace(os.sep, "/")
-    marker = "/.git/info/tier/"
-    if marker in norm:
-        return norm.split(marker, 1)[0].replace("/", os.sep) or os.sep
     parent = os.path.dirname(path)
     owner = os.path.join(parent, ".owner")
     if os.path.isfile(owner):
@@ -125,7 +188,11 @@ def _work_root_for(path: str, hint: str = "") -> str:
                 return value
         except OSError:
             pass
-    return hint or os.path.dirname(path)
+    norm = path.replace(os.sep, "/")
+    marker = "/.git/info/tier/"
+    if marker in norm:
+        return norm.split(marker, 1)[0].replace("/", os.sep) or os.sep
+    return hint or parent
 
 
 def resolve_doc(target=None, root=None):
@@ -181,12 +248,10 @@ def ensure_doc(target=None, root=None, session=None, session_key: str = "",
 def _write_owner(path: str, work_root: str) -> None:
     """Record which repository a cached map describes.
 
-    Only needed when the map lives outside its repository; a tracked
-    `<root>/repo.tier` is already next to its sources.
+    Needed whenever the map is not beside its sources, which includes the common
+    case of a map under `<gitdir>/info/tier/`: in a linked worktree that gitdir
+    lives outside the checkout, so the path alone cannot identify the root.
     """
-    norm = os.path.abspath(path).replace(os.sep, "/")
-    if "/.git/info/tier/" in norm:
-        return
     if os.path.dirname(os.path.abspath(path)) == os.path.abspath(work_root):
         return
     try:

@@ -170,11 +170,16 @@ def resolve(doc: Doc, ids: list, follow: bool = False):
     return order, missing
 
 
-def get(doc: Doc, ids: list, follow: bool = False, table_mode: str = "raw"):
-    """Return (text, missing_ids). follow=True also pulls 1-hop `>` references."""
+def get(doc: Doc, ids: list, follow: bool = False, table_mode: str = "raw",
+        calls_filter=None):
+    """Return (text, missing_ids). follow=True also pulls 1-hop `>` references.
+
+    `calls_filter` narrows `|calls` tables to the rows it accepts; None keeps
+    the stored table in full.
+    """
     by = doc.by_id()
     order, missing = resolve(doc, ids, follow)
-    return "\n".join(render_section(by[i], table_mode) for i in order), missing
+    return "\n".join(render_section(by[i], table_mode, calls_filter) for i in order), missing
 
 
 class Session:
@@ -207,7 +212,7 @@ class Session:
         return entry in self.seen.get(key, set())
 
     def get(self, doc: Doc, ids: list, follow: bool = False, table_mode: str = "raw",
-            key: str = "", force: bool = False):
+            key: str = "", force: bool = False, calls_filter=None):
         """Like get(), but replaces already-served bodies with a one-line stub."""
         by = doc.by_id()
         order, missing = resolve(doc, ids, follow)
@@ -217,7 +222,7 @@ class Session:
             if i in seen and not force:
                 parts.append(f"@{i} (already in context; not resent)")
                 continue
-            parts.append(render_section(by[i], table_mode))
+            parts.append(render_section(by[i], table_mode, calls_filter))
             seen.add(i)
         return "\n".join(parts), missing
 

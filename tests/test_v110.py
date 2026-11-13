@@ -139,6 +139,214 @@ class ContextTests(unittest.TestCase):
             self.assertNotIn("## Impact:", proc.stdout)
 
 
+class WorktreeCacheTests(unittest.TestCase):
+    """Cache resolution when `.git` is a pointer file (worktree or submodule)."""
+
+    def test_git_pointer_file_resolves_to_its_own_gitdir(self):
+        with tempfile.TemporaryDirectory() as base:
+            work = os.path.join(base, "work")
+            admin = os.path.join(base, "main", ".git", "worktrees", "work")
+            os.makedirs(work)
+            os.makedirs(admin)
+            _put(work, "a.py", "def a():\n    return 1\n")
+            _put(work, ".git", f"gitdir: {admin}\n")
+            self.assertEqual(cache._git_dir(work), admin)
+            self.assertEqual(cache.cache_path(work),
+                             os.path.join(admin, "info", "tier", "repo.tier"))
+            self.assertEqual(cache.cache_kind(cache.cache_path(work), work), "git")
+
+    def test_relative_git_pointer_is_resolved_against_checkout(self):
+        with tempfile.TemporaryDirectory() as base:
+            work = os.path.join(base, "work")
+            os.makedirs(os.path.join(base, "admin"))
+            _put(work, "a.py", "def a():\n    return 1\n")
+            _put(work, ".git", "gitdir: ../admin\n")
+            self.assertEqual(cache._git_dir(work), os.path.join(base, "admin"))
+
+    def test_broken_pointer_falls_back_to_user_cache(self):
+        with tempfile.TemporaryDirectory() as base, tempfile.TemporaryDirectory() as cdir:
+            work = os.path.join(base, "work")
+            _put(work, "a.py", "def a():\n    return 1\n")
+            _put(work, ".git", "not a pointer at all\n")
+            old = os.environ.get("TIER_CACHE_DIR")
+            os.environ["TIER_CACHE_DIR"] = cdir
+            try:
+                self.assertEqual(cache._git_dir(work), "")
+                path = cache.cache_path(work)
+                self.assertTrue(path.startswith(os.path.abspath(cdir)))
+            finally:
+                if old is None:
+                    os.environ.pop("TIER_CACHE_DIR", None)
+                else:
+                    os.environ["TIER_CACHE_DIR"] = old
+
+    def test_read_only_gitdir_falls_back_to_user_cache(self):
+        with tempfile.TemporaryDirectory() as base, tempfile.TemporaryDirectory() as cdir:
+            work = os.path.join(base, "work")
+            admin = os.path.join(base, "admin")
+            os.makedirs(admin)
+            _put(work, "a.py", "def a():\n    return 1\n")
+            _put(work, ".git", f"gitdir: {admin}\n")
+            old = os.environ.get("TIER_CACHE_DIR")
+            os.environ["TIER_CACHE_DIR"] = cdir
+            try:
+                with mock.patch.object(cache, "_writable_dir", return_value=False):
+                    path = cache.cache_path(work)
+                self.assertTrue(path.startswith(os.path.abspath(cdir)))
+            finally:
+                if old is None:
+                    os.environ.pop("TIER_CACHE_DIR", None)
+                else:
+                    os.environ["TIER_CACHE_DIR"] = old
+
+    def test_owner_manifest_restores_root_for_out_of_tree_map(self):
+        with tempfile.TemporaryDirectory() as base:
+            work = os.path.join(base, "work")
+            admin = os.path.join(base, "main", ".git", "worktrees", "work")
+            os.makedirs(work)
+            os.makedirs(admin)
+            _put(work, "a.py", '"""A."""\n\ndef a():\n    return 1\n')
+            _put(work, ".git", f"gitdir: {admin}\n")
+            path, doc, root = cache.ensure_doc(work)
+            self.assertEqual(root, work)
+            self.assertTrue(os.path.isfile(path))
+            # A later resolve from the map path alone must find the checkout.
+            self.assertEqual(cache.resolve_doc(path)[1], work)
+
+    def test_real_worktree_shares_nothing_and_stays_clean(self):
+        env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
+                   GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
+        with tempfile.TemporaryDirectory() as base:
+            main = os.path.join(base, "main")
+            linked = os.path.join(base, "linked")
+            os.makedirs(main)
+            _put(main, "a.py", '"""Alpha."""\n\ndef helper(x):\n    return x + 1\n')
+            _put(main, ".gitignore", "__pycache__/\n")
+            for cmd in (["git", "init", "-q", main],
+                        ["git", "-C", main, "add", "."],
+                        ["git", "-C", main, "commit", "-qm", "init"]):
+                subprocess.run(cmd, check=True, env=env, capture_output=True)
+            added = subprocess.run(
+                ["git", "-C", main, "worktree", "add", "-q", linked, "-b", "feature"],
+                env=env, capture_output=True, text=True,
+            )
+            if added.returncode != 0:
+                self.skipTest(f"git worktree unavailable: {added.stderr.strip()}")
+            self.assertTrue(os.path.isfile(os.path.join(linked, ".git")),
+                            "a linked worktree must have a .git pointer file")
+
+            main_path, _doc, main_root = cache.ensure_doc(main)
+            linked_path, linked_doc, linked_root = cache.ensure_doc(linked)
+            self.assertEqual(main_root, main)
+            self.assertEqual(linked_root, linked)
+            self.assertNotEqual(main_path, linked_path,
+                                "worktrees hold different branches, so each needs its own map")
+
+            _put(linked, "a.py",
+                 '"""Feature."""\n\ndef helper(x):\n    return x + 2\n\n'
+                 'def brand_new():\n    return 9\n')
+            _, linked_after, _ = cache.ensure_doc(linked)
+            linked_names = {row["name"] for sec in linked_after.sections
+                            for row in tier._symbol_rows(sec)}
+            self.assertIn("brand_new", linked_names)
+
+            _, main_after, _ = cache.ensure_doc(main)
+            main_names = {row["name"] for sec in main_after.sections
+                          for row in tier._symbol_rows(sec)}
+            self.assertNotIn("brand_new", main_names,
+                             "the main worktree must not pick up the feature branch")
+
+            for tree in (main, linked):
+                status = subprocess.run(["git", "-C", tree, "status", "--porcelain"],
+                                        capture_output=True, text=True, check=True)
+                self.assertNotIn("repo.tier", status.stdout)
+                self.assertNotIn(".git/info", status.stdout)
+            main_status = subprocess.run(["git", "-C", main, "status", "--porcelain"],
+                                          capture_output=True, text=True, check=True)
+            self.assertEqual(main_status.stdout.strip(), "",
+                             "the main worktree must stay byte-clean")
+
+
+class CallFilterTests(unittest.TestCase):
+    """Rendering-time narrowing of `|calls` tables."""
+
+    def _doc(self, td):
+        _put(td, "a.py",
+             '"""A."""\n\n\ndef leaf(x):\n    return x\n\n\n'
+             'def mid(x):\n    return leaf(x)\n\n\ndef other(x):\n    return x\n')
+        _put(td, "b.py",
+             '"""B."""\nfrom a import mid\n\n\ndef top():\n    return mid(1)\n')
+        return tier.from_repo(td)
+
+    def test_filter_keeps_only_matching_callers(self):
+        with tempfile.TemporaryDirectory() as td:
+            doc = self._doc(td)
+            keep = context._calls_filter_for(doc, ["a.py#mid"], "auto")
+            rendered = tier.render_section(doc.by_id()["a.py"], "raw", keep)
+            self.assertIn("|calls[1]{caller,callee,module}", rendered)
+            self.assertIn("mid,leaf,.", rendered)
+            self.assertNotIn("top,mid,a.py", rendered)
+
+    def test_filter_none_keeps_the_stored_table(self):
+        with tempfile.TemporaryDirectory() as td:
+            doc = self._doc(td)
+            body = tier.render_section(doc.by_id()["a.py"])
+            self.assertIn("|calls[", body)
+            self.assertEqual(body, tier.render_section(doc.by_id()["a.py"], "raw", None))
+
+    def test_filter_all_mode_is_unfiltered(self):
+        with tempfile.TemporaryDirectory() as td:
+            doc = self._doc(td)
+            self.assertIsNone(context._calls_filter_for(doc, ["a.py#mid"], "all"))
+
+    def test_filter_none_mode_drops_the_table(self):
+        with tempfile.TemporaryDirectory() as td:
+            doc = self._doc(td)
+            drop = context._calls_filter_for(doc, ["a.py#mid"], "none")
+            rendered = tier.render_section(doc.by_id()["a.py"], "raw", drop)
+            self.assertNotIn("|calls[", rendered)
+
+    def test_empty_result_omits_the_table_entirely(self):
+        with tempfile.TemporaryDirectory() as td:
+            doc = self._doc(td)
+            keep = context._calls_filter_for(doc, ["a.py#other"], "auto")
+            rendered = tier.render_section(doc.by_id()["a.py"], "raw", keep)
+            self.assertNotIn("|calls[", rendered,
+                             "a filtered-to-empty table must not emit a zero-count header")
+            self.assertIn("|symbols[", rendered)
+
+    def test_filtered_render_still_parses_and_lints(self):
+        with tempfile.TemporaryDirectory() as td:
+            doc = self._doc(td)
+            keep = context._calls_filter_for(doc, ["a.py#mid"], "auto")
+            rendered = tier.render_section(doc.by_id()["a.py"], "raw", keep)
+            again = tier.parse(rendered)
+            self.assertEqual([m for l, m in tier.lint(again, 10**9) if l == "error"], [])
+            self.assertEqual(tier.dumps(tier.parse(tier.dumps(again))), tier.dumps(again))
+
+    def test_impact_still_reads_the_full_table(self):
+        with tempfile.TemporaryDirectory() as td:
+            doc = self._doc(td)
+            res = tier.impact(doc, "a.py#leaf", root=td)
+            self.assertEqual(len(res["symbol_dependents"]), 1)
+            self.assertIn("a.py#mid", res["symbol_dependents"][0])
+
+    def test_context_uses_the_filter_and_respects_budget(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._doc(td)
+            for budget in (200, 400, 900):
+                res = context.build_context(td, "mid leaf", budget_tokens=budget)
+                self.assertLessEqual(res["tokens"], budget, f"budget={budget}")
+
+    def test_context_include_calls_all_keeps_full_table(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._doc(td)
+            auto = context.build_context(td, "mid leaf", budget_tokens=4000)
+            full = context.build_context(td, "mid leaf", budget_tokens=4000,
+                                         include_calls="all")
+            self.assertGreaterEqual(full["tokens"], auto["tokens"])
+
+
 class CacheTests(unittest.TestCase):
     def test_tracked_repo_tier_wins(self):
         with tempfile.TemporaryDirectory() as td:

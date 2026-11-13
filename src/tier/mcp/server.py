@@ -67,6 +67,13 @@ TOOLS = [
                     "default": True,
                     "description": "Include a compact dependency/impact summary for repo maps",
                 },
+                "include_calls": {
+                    "type": "string",
+                    "enum": ["auto", "all", "none"],
+                    "default": "auto",
+                    "description": "Call-table detail: auto keeps only edges leaving the matched "
+                                   "symbols, all keeps every stored edge, none omits the table",
+                },
             },
             "required": ["query"],
         },
@@ -362,6 +369,7 @@ def call(name: str, a: dict) -> str:
             a.get("query", ""),
             budget_tokens=int(a.get("budget_tokens", 3000)),
             include_impact=bool(a.get("include_impact", True)),
+            include_calls=a.get("include_calls", "auto"),
             session=SESSION,
             session_key=resolved,
         )

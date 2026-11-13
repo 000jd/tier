@@ -238,8 +238,8 @@ def _live_lines(lines: list) -> list:
     return out
 
 
-def render_section(sec: Section, table_mode: str = "raw") -> str:
-    return sec.text(table_mode)
+def render_section(sec: Section, table_mode: str = "raw", calls_filter=None) -> str:
+    return sec.text(table_mode, calls_filter)
 
 
 def to_obj(doc: Doc) -> dict:

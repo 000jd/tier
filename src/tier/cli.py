@@ -194,6 +194,8 @@ def main(argv=None):
     p.add_argument("--budget-tokens", type=int, default=3000)
     p.add_argument("--root")
     p.add_argument("--no-impact", action="store_true")
+    p.add_argument("--include-calls", choices=["auto", "all", "none"], default="auto",
+                   help="call-table detail: auto keeps edges leaving the matched symbols")
     p.add_argument("--no-dedup", action="store_true")
     a = ap.parse_args(argv)
 
@@ -349,6 +351,7 @@ def main(argv=None):
                 a.target, " ".join(a.query), root=a.root,
                 budget_tokens=a.budget_tokens,
                 include_impact=not a.no_impact, dedup=not a.no_dedup,
+                include_calls=a.include_calls,
             )
         except (OSError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)

@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import csv
+import io
 import os
 import re
 from dataclasses import dataclass, field
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 SIGIL_CHARS = "%@?!=|>$;\\"
 SEC_RE = re.compile(r"^@([a-z0-9][a-z0-9_.-]*)(?:[ \t]+(.*))?$")
 HDR_RE = re.compile(r"^%([a-z][a-z0-9_-]*)(?:[ \t]+(.*))?$")
@@ -63,17 +64,59 @@ def _render_table(name: str, cols: list, rows: list, mode: str) -> list:
     return out
 
 
-def render_lines(lines: list, table_mode: str = "raw") -> list:
-    """Render section lines, optionally expanding tables for LLM consumption."""
+CALLS_TABLE = "calls"
+
+
+def _filter_call_rows(lines: list, i: int, n: int, keep) -> list:
+    """Return the header plus only the `calls` rows that `keep` accepts.
+
+    The declared row count in the header is rewritten to the surviving count so
+    the result is still a valid TIER table. Rows are CSV, so they are re-encoded
+    rather than sliced. An empty result returns no lines at all, mirroring
+    `_symbol_table`, which omits a table rather than emitting a zero-count header.
+    """
+    cols = [c.strip() for c in TABLE_RE.match(lines[i]).group(3).split(",")]
+    rows = _table_rows(lines, i, n)
+    kept = [r for r in rows if keep(r)]
+    if not kept:
+        return []
+    out = [f"|{CALLS_TABLE}[{len(kept)}]{{{','.join(cols)}}}"]
+    for row in kept:
+        out.append(_csv_row(row))
+    return out
+
+
+def _csv_row(cells: list) -> str:
+    """Encode one table row, matching the converter's CSV escaping."""
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="").writerow([str(c).replace("\n", " ") for c in cells])
+    return buf.getvalue()
+
+
+def render_lines(lines: list, table_mode: str = "raw", calls_filter=None) -> list:
+    """Render section lines, optionally expanding tables for LLM consumption.
+
+    `calls_filter` is a callable receiving one `calls` row (a list of CSV cells)
+    and returning True to keep it. It only ever narrows `|calls` tables; every
+    other line and table is untouched, and `None` keeps the stored bytes.
+    """
     if table_mode not in TABLE_MODES:
         raise ValueError(f"unknown table mode '{table_mode}' (use {', '.join(TABLE_MODES)})")
-    if table_mode == "raw":
+    if table_mode == "raw" and calls_filter is None:
         return list(lines)
     out, i = [], 0
     while i < len(lines):
         m = TABLE_RE.match(lines[i])
         if m:
             name, n = m.group(1), _table_count(m.group(2))
+            if name == CALLS_TABLE and calls_filter is not None:
+                out += _filter_call_rows(lines, i, n, calls_filter)
+                i += 1 + n
+                continue
+            if table_mode == "raw":
+                out.append(lines[i])
+                i += 1
+                continue
             cols = [c.strip() for c in m.group(3).split(",")]
             out += _render_table(name, cols, _table_rows(lines, i, n), table_mode)
             i += 1 + n
@@ -137,14 +180,14 @@ class Section:
     line_no: int = 0
     level: int = 0
 
-    def text(self, table_mode: str = "raw") -> str:
+    def text(self, table_mode: str = "raw", calls_filter=None) -> str:
         """What `get` returns for this section: header, abstract, body."""
         out = []
         if self.id != "_":
             out.append(f"@{self.id}" + (f" {self.title}" if self.title else ""))
             if self.abstract:
                 out.append("? " + self.abstract)
-        out += render_lines(self.lines, table_mode)
+        out += render_lines(self.lines, table_mode, calls_filter)
         return "\n".join(out)
 
 

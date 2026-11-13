@@ -11,7 +11,7 @@ from __future__ import annotations
 from .cache import ensure_doc
 from .models import Doc, _clip
 from .parser import is_repo_doc, render_section
-from .repo import _symbol_rows, impact, slice_symbols
+from .repo import _call_graph, _symbol_key, _symbol_rows, impact, slice_symbols
 from .retrieval import Session, _index_tokens, find
 from .tokens import count_tokens
 
@@ -62,6 +62,55 @@ def _symbol_hits(doc: Doc, query: str) -> list:
     return out
 
 
+def _call_neighbourhood(doc: Doc, targets: list) -> set:
+    """Keys (module_rel#symbol) for the targets plus their immediate callers/callees.
+
+    One hop in each direction: what the target calls, and what calls the target.
+    Deeper edges stay out of the packed body; `tier impact` still reads the whole
+    on-disk table when a caller needs the full graph.
+    """
+    if not targets:
+        return set()
+    wanted = set(targets)
+    callees, callers = _call_graph(doc)
+    for key in list(targets):
+        wanted.update(callees.get(key, ()))
+        wanted.update(callers.get(key, ()))
+    return wanted
+
+
+def _calls_filter_for(doc: Doc, targets: list, mode: str = "auto"):
+    """Build a row predicate for `|calls` tables, or None to keep them whole.
+
+    Modes:
+      ``auto``  keep only edges whose *caller* is one of the target symbols. That
+                is the set a reader needs to see what the fetched symbol invokes,
+                without dragging in every unrelated edge in the module.
+      ``all``   leave the stored table untouched.
+      ``none``  drop the table entirely.
+    """
+    mode = (mode or "auto").lower()
+    if mode == "all":
+        return None
+    if mode == "none":
+        return lambda row: False
+    wanted = set(targets)
+    if not wanted:
+        return None
+
+    def keep(row, _wanted=wanted):
+        if len(row) < 3:
+            return True
+        caller, module = row[0], row[2]
+        if module in ("", "."):
+            # A same-module call: the table does not repeat the module name, so
+            # match the caller against any target in this module.
+            return any(k.endswith("#" + caller) for k in _wanted)
+        return f"{module}#{caller}" in _wanted
+
+    return keep
+
+
 def _impact_block(doc: Doc, root: str, target_id: str, symbol: str = "") -> str:
     """Compact dependency summary for one module (and symbol, when given)."""
     try:
@@ -92,7 +141,8 @@ def _impact_block(doc: Doc, root: str, target_id: str, symbol: str = "") -> str:
 
 def build_context(target=None, query: str = "", *, root=None, budget_tokens: int = DEFAULT_BUDGET,
                   include_impact: bool = True, session: Session = None,
-                  session_key: str = "", dedup: bool = True, fast=None) -> dict:
+                  session_key: str = "", dedup: bool = True, fast=None,
+                  include_calls: str = "auto") -> dict:
     """Return ``{"text", "path", "doc", "sections", "slices", "tokens"}``."""
     query = (query or "").strip()
     if not query:
@@ -119,6 +169,11 @@ def build_context(target=None, query: str = "", *, root=None, budget_tokens: int
             order.append(sid)
     order = order[:MAX_SECTIONS]
 
+    # Narrow `|calls` tables to the matched symbols and their 1-hop neighbourhood
+    # so a packed body carries the relevant edges, not every edge in the module.
+    target_keys = [_symbol_key(doc, sid, name) for sid, name in symbols]
+    calls_filter = _calls_filter_for(doc, target_keys, include_calls)
+
     parts, used, omitted = [], 0, []
     sections_out, slices_out = [], []
 
@@ -134,7 +189,7 @@ def build_context(target=None, query: str = "", *, root=None, budget_tokens: int
         return used + _count(SEP + candidate, fast=fast) <= budget
 
     for sid in order:
-        body = _render_section(doc, sid, session, key, dedup)
+        body = _render_section(doc, sid, session, key, dedup, calls_filter)
         if not fits(body):
             omitted.append(f"@{sid}")
             continue
@@ -200,11 +255,12 @@ def build_context(target=None, query: str = "", *, root=None, budget_tokens: int
     }
 
 
-def _render_section(doc: Doc, sid: str, session: Session, key: str, dedup: bool) -> str:
+def _render_section(doc: Doc, sid: str, session: Session, key: str, dedup: bool,
+                    calls_filter=None) -> str:
     """Render one section, or its stub when Session already delivered it."""
     if dedup and session is not None and session.is_marked(key, sid):
         return f"@{sid} (already in context; not resent)"
-    body = render_section(doc.by_id()[sid])
+    body = render_section(doc.by_id()[sid], "raw", calls_filter)
     if dedup and session is not None:
         session.mark(key, sid)
     return body

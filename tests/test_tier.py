@@ -285,7 +285,7 @@ class T(unittest.TestCase):
         self.assertEqual(md.meta["title"], "T")
 
     def test_roundtrip_all_documents(self):
-        for name in ("examples/payments-runbook.md", "SPEC.md"):
+        for name in ("examples/payments-runbook.md", "docs/spec.md"):
             d = tier.from_md(self.read(name))
             out = tier.dumps(d)
             self.assertEqual(tier.dumps(tier.parse(out)), out, name)
@@ -748,7 +748,7 @@ class T(unittest.TestCase):
     def test_pyproject_and_version_metadata(self):
         pyproject = self.read("pyproject.toml")
         self.assertIn('name = "tier-ctx"', pyproject)
-        self.assertIn('version = "1.1.0"', pyproject)
+        self.assertIn('version = "1.2.0"', pyproject)
         self.assertIn('tier = "tier.cli:main"', pyproject)
         self.assertIn('tier-mcp = "tier.mcp.server:main"', pyproject)
         self.assertIn('tier-mcp-sdk = "tier.mcp.sdk_server:main"', pyproject)
@@ -757,14 +757,14 @@ class T(unittest.TestCase):
         self.assertIn('mcp = ["mcp>=2.0"]', pyproject)
         self.assertIn('treesitter = ["tree-sitter-language-pack>=0.7.0"]', pyproject)
         self.assertIn("all = [", pyproject)
-        self.assertEqual(json.loads(self.read("benchmarks/package.json"))["version"], "1.1.0")
-        self.assertEqual(tier.VERSION, "1.1.0")
-        self.assertIn("# TIER v1.1.0", self.read("SPEC.md"))
+        self.assertEqual(json.loads(self.read("benchmarks/package.json"))["version"], "1.2.0")
+        self.assertEqual(tier.VERSION, "1.2.0")
+        self.assertIn("# TIER v1.2.0", self.read("docs/spec.md"))
         # The README no longer carries a version in its title; the CHANGELOG does.
-        self.assertIn("[1.1.0]", self.read("CHANGELOG.md"))
-        self.assertTrue(self.read("SPEC.tier").startswith("%tier 1.1.0"))
-        self.assertTrue(self.read("repo.tier").startswith("%tier 1.1.0"))
-        self.assertTrue(self.read("examples/payments-runbook.tier").startswith("%tier 1.1.0"))
+        self.assertIn("[1.2.0]", self.read("CHANGELOG.md"))
+        self.assertTrue(self.read("SPEC.tier").startswith("%tier 1.2.0"))
+        self.assertTrue(self.read("repo.tier").startswith("%tier 1.2.0"))
+        self.assertTrue(self.read("examples/payments-runbook.tier").startswith("%tier 1.2.0"))
 
     def test_mcp_slice_and_impact(self):
         with tempfile.TemporaryDirectory() as td:

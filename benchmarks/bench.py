@@ -1241,9 +1241,21 @@ def bench_polyglot():
         target_ids = [s.id for s in doc.sections
                       if s.title in {rel for rel, _syms in POLYGLOT_SLICES}]
         l2, _ = tier.get(doc, target_ids, follow=True)
+        # Surgical view: the |calls tables are narrowed to the sliced symbols and
+        # their immediate callers/callees. The on-disk map keeps every edge.
+        from tier import context as _ctx
+
+        sliced_keys = [f"{rel}#{sym}" for rel, syms in POLYGLOT_SLICES for sym in syms]
+        calls_keep = _ctx._calls_filter_for(doc, sliced_keys, "auto")
+        l2_surgical, _ = tier.get(doc, target_ids, follow=True, calls_filter=calls_keep)
         raw_t, full_t, l0_t, slices_t, l2_t = toks([raw, full, l0, slices, l2])
+        surgical_l2_t = toks([l2_surgical])[0]
         full_l2_l3_t = toks([l0 + "\n" + full + "\n" + slices])[0]
-        surgical_t = toks([l0 + "\n" + l2 + "\n" + slices])[0]
+        surgical_t = toks([l0 + "\n" + l2_surgical + "\n" + slices])[0]
+        unfiltered_surgical_t = toks([l0 + "\n" + l2 + "\n" + slices])[0]
+        no_calls_l2, _ = tier.get(doc, target_ids, follow=True,
+                                  calls_filter=lambda row: False)
+        no_calls_t = toks([l0 + "\n" + no_calls_l2 + "\n" + slices])[0]
 
         found, edges = set(), set()
         for sec in doc.sections:
@@ -1279,8 +1291,13 @@ def bench_polyglot():
              f"{100 * (raw_t - l0_t) / max(1, raw_t):.0f}% fewer"),
             ("L0 + full L2 + 7 L3 slices", len(doc.sections), full_l2_l3_t,
              f"{100 * (raw_t - full_l2_l3_t) / max(1, raw_t):.0f}% fewer"),
-            ("L0 + target L2 + 7 L3 slices", len(target_ids), surgical_t,
-             f"{100 * (raw_t - surgical_t) / max(1, raw_t):.0f}% fewer"),
+            ("L0 + target L2 (unfiltered calls) + 7 L3 slices", len(target_ids),
+             unfiltered_surgical_t,
+             f"{100 * (raw_t - unfiltered_surgical_t) / max(1, raw_t):.0f}% fewer"),
+            ("L0 + target L2 (matched-symbol calls) + 7 L3 slices", len(target_ids),
+             surgical_t, f"{100 * (raw_t - surgical_t) / max(1, raw_t):.0f}% fewer"),
+            ("L0 + target L2 (no calls table) + 7 L3 slices", len(target_ids), no_calls_t,
+             f"{100 * (raw_t - no_calls_t) / max(1, raw_t):.0f}% fewer"),
         ]
         say("H. polyglot repository map (Python, TypeScript, Go, Rust)")
         table(rows, ["measure", "sections", "tokens", "vs raw"])
@@ -1292,7 +1309,9 @@ def bench_polyglot():
         say(f"   lint errors: {len(errors)}; round-trip stable: {'Y' if stable else 'N'}")
         say(f"   check: all exported symbols captured: {'Y' if not missing_symbols else 'N'};"
             f" all cross-file edges captured: {'Y' if found_edges == POLYGLOT_EDGES else 'N'};"
-            f" surgical L0+L2+L3 under 40% of raw: {'Y' if surgical_t < raw_t * 0.40 else 'N'}")
+            f" surgical L0+L2+L3 under 35% of raw when call tables are omitted: "
+            f"{'Y' if no_calls_t < raw_t * 0.35 else 'N'};"
+            f" under 40% with 1-hop calls: {'Y' if surgical_t < raw_t * 0.40 else 'N'}")
         say()
 
 

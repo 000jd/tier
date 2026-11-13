@@ -59,9 +59,9 @@ def build_server(root: str = ".", server_cls=None, server_name: str = "tier"):
 
     @mcp.tool(name="tier_context", description=_description("tier_context"))
     def tier_context(query: str, path: Optional[str] = None, budget_tokens: int = 3000,
-                     include_impact: bool = True) -> str:
+                     include_impact: bool = True, include_calls: str = "auto") -> str:
         args = {"query": query, "budget_tokens": budget_tokens,
-                "include_impact": include_impact}
+                "include_impact": include_impact, "include_calls": include_calls}
         if path is not None:
             args["path"] = path
         return stdio.call("tier_context", args)
