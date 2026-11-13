@@ -758,14 +758,17 @@ def _repo_info(rel: str, full: str, ext: str, text: str = None) -> dict:
         text = _read_text(full)
     purpose, symbols, raw_imports = _extract_symbols(rel, text)
     try:
-        mtime_ns = os.stat(full).st_mtime_ns
+        st = os.stat(full)
+        mtime_ns, size = st.st_mtime_ns, st.st_size
     except OSError:
-        mtime_ns = 0
+        mtime_ns, size = 0, len(text.encode("utf-8", "replace"))
     return {
         "rel": rel, "ext": ext, "text": text, "purpose": purpose,
         "symbols": symbols, "raw_imports": raw_imports,
         "sha256": _sha256(text), "mtime_ns": mtime_ns,
-        "size": len(text.encode("utf-8", "replace")),
+        # On-disk byte size, not len(text): the reader uses universal newlines,
+        # so a CRLF checkout would otherwise never match its own fingerprint.
+        "size": size,
     }
 
 
@@ -1192,6 +1195,11 @@ def _git_changed_paths(root: str):
         return None
     entries = proc.stdout.split("\0")
     paths, i = [], 0
+    # `git rev-parse --show-toplevel` reports a resolved path, while `root` may
+    # still contain symlinked components (macOS /var -> /private/var, /tmp).
+    # Comparing one against the other drops every file, so resolve both.
+    root_real = os.path.realpath(root)
+    top_real = os.path.realpath(top)
     while i < len(entries):
         entry = entries[i]
         i += 1
@@ -1200,8 +1208,8 @@ def _git_changed_paths(root: str):
         status, path = entry[:2], entry[3:]
         if status[:1] in ("R", "C"):
             i += 1  # the following NUL entry is the old path
-        full = os.path.realpath(os.path.join(top, path))
-        rel = os.path.relpath(full, root)
+        full = os.path.realpath(os.path.join(top_real, path))
+        rel = os.path.relpath(full, root_real)
         if rel == ".." or rel.startswith(".." + os.sep) or rel == ".":
             continue
         paths.append(rel.replace(os.sep, "/"))

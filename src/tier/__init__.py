@@ -40,8 +40,8 @@ from .pipe import (
     detect_stream_format, from_stream, hook_process, log_doc, pipe_compress,
 )
 from .plugin import (
-    TIER_BEGIN, TIER_END, _hook_commands, _merge_hook_settings, _plugin_instructions,
-    _write_marked_instructions, init_plugin,
+    TIER_BEGIN, TIER_END, _hook_commands, _looks_like_tier_hook, _merge_hook_settings,
+    _plugin_instructions, _write_marked_instructions, init_plugin,
 )
 
 __version__ = VERSION

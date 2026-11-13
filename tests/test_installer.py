@@ -150,8 +150,9 @@ class InstallerTests(unittest.TestCase):
                 home, ".codeium/windsurf/mcp_config.json")))["mcpServers"])
             settings = json.loads(_read(os.path.join(root, ".claude/settings.json")))
             commands = json.dumps(settings)
+            hook_cmds = tier._hook_commands(settings["hooks"]["PostToolUse"])
             self.assertIn("other-cmd", commands)
-            self.assertIn("tier hook", commands)
+            self.assertTrue(any(installer._is_tier_hook(c) for c in hook_cmds))
             self.assertTrue(settings["keep"])
             self.assertIn(tier.TIER_BEGIN, _read(os.path.join(root, "CLAUDE.md")))
             self.assertIn(tier.TIER_BEGIN, _read(os.path.join(root, "AGENTS.md")))
@@ -169,7 +170,8 @@ class InstallerTests(unittest.TestCase):
             after = _snapshot(root), _snapshot(home)
             self.assertEqual(before, after)
             settings = json.loads(_read(os.path.join(root, ".claude/settings.json")))
-            self.assertEqual(json.dumps(settings).count("tier hook"), 1)
+            hook_cmds = tier._hook_commands(settings["hooks"]["PostToolUse"])
+            self.assertEqual(sum(1 for c in hook_cmds if installer._is_tier_hook(c)), 1)
             self.assertEqual(_read(os.path.join(root, "CLAUDE.md")).count(tier.TIER_BEGIN), 1)
 
     def test_dry_run_makes_no_mutations(self):
@@ -204,9 +206,11 @@ class InstallerTests(unittest.TestCase):
             data = json.loads(_read(os.path.join(root, ".mcp.json")))
             self.assertIn("other", data["mcpServers"])
             self.assertNotIn("tier", data["mcpServers"])
-            commands = json.dumps(json.loads(_read(os.path.join(root, ".claude/settings.json"))))
+            settings = json.loads(_read(os.path.join(root, ".claude/settings.json")))
+            commands = json.dumps(settings)
+            hook_cmds = tier._hook_commands(settings["hooks"]["PostToolUse"])
             self.assertIn("other-cmd", commands)
-            self.assertNotIn("tier hook", commands)
+            self.assertFalse(any(installer._is_tier_hook(c) for c in hook_cmds))
             self.assertNotIn(tier.TIER_BEGIN, _read(os.path.join(root, "CLAUDE.md")))
 
     def test_no_repo_no_hook_no_instructions(self):

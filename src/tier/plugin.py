@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import subprocess
 import sys
 
 from .converter import from_md
@@ -58,6 +59,22 @@ def _hook_commands(value) -> list:
     return out
 
 
+def _looks_like_tier_hook(cmd) -> bool:
+    """Token-based check, tolerant of POSIX and Windows quoting."""
+    if not isinstance(cmd, str):
+        return False
+    parts = [p.strip("'\"") for p in cmd.split()]
+    norm = [p.replace("\\", "/").lower() for p in parts]
+    if "hook" not in norm:
+        return False
+    if any(os.path.basename(n) in ("tier", "tier.exe", "tier.py", "tier.cmd") for n in norm):
+        return True
+    for i, token in enumerate(norm):
+        if token == "-m" and i + 1 < len(norm) and norm[i + 1] in ("tier", "tier.mcp"):
+            return True
+    return False
+
+
 def _merge_hook_settings(target: str) -> str:
     path = os.path.join(target, ".claude", "settings.json")
     if os.path.exists(path):
@@ -75,8 +92,15 @@ def _merge_hook_settings(target: str) -> str:
     post = hooks.setdefault("PostToolUse", [])
     if not isinstance(post, list):
         raise ValueError("existing PostToolUse hooks entry is not a list")
-    command = shlex.join([sys.executable or "python3", "-m", "tier", "hook", "--max-tokens", "600"])
-    if not any(("-m tier hook" in c) or ("tier hook" in c) for c in _hook_commands(post)):
+    if sys.platform.startswith("win"):
+        command = subprocess.list2cmdline(
+            [sys.executable or "python3", "-m", "tier", "hook", "--max-tokens", "600"]
+        )
+    else:
+        command = shlex.join(
+            [sys.executable or "python3", "-m", "tier", "hook", "--max-tokens", "600"]
+        )
+    if not any(_looks_like_tier_hook(c) for c in _hook_commands(post)):
         post.append({
             "matcher": "Bash|Read|Grep|Glob|WebFetch",
             "hooks": [{"type": "command", "command": command}],

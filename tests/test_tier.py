@@ -736,12 +736,12 @@ class T(unittest.TestCase):
             data = json.loads(self.read(os.path.join(td, ".claude/settings.json")))
             commands = tier._hook_commands(data["hooks"]["PostToolUse"])
             self.assertIn("other-cmd", commands)
-            self.assertTrue(any(("-m tier hook" in c) or ("tier hook" in c) for c in commands))
+            self.assertTrue(any(tier._looks_like_tier_hook(c) for c in commands))
             self.assertTrue(res["hook"].endswith("settings.json"))
             tier.init_plugin(td, hook=True)
             data = json.loads(self.read(os.path.join(td, ".claude/settings.json")))
             commands = tier._hook_commands(data["hooks"]["PostToolUse"])
-            self.assertEqual(sum(1 for c in commands if ("-m tier hook" in c) or ("tier hook" in c)), 1)
+            self.assertEqual(sum(1 for c in commands if tier._looks_like_tier_hook(c)), 1)
 
     def test_pyproject_and_version_metadata(self):
         pyproject = self.read("pyproject.toml")
@@ -1290,7 +1290,13 @@ pub fn buffer() -> [u8; 32] {
         with tempfile.TemporaryDirectory() as td:
             out = os.path.join(td, "full.tier")
             capped = tier.pipe_compress(big, "log", 20, out)
-            self.assertLessEqual(tier._tokens(capped), 20)
+            # The artifact path is always emitted, so a budget below the path's own
+            # token cost is best-effort by design (see SPEC "Stream and log
+            # compression"). On a long TMPDIR the path alone can exceed 20 tokens,
+            # in which case the artifact line is all that can be returned.
+            path_line = f"Full artifact: {out}"
+            floor = tier._tokens(path_line)
+            self.assertLessEqual(tier._tokens(capped), max(20, floor))
             self.assertIn(out, capped)
             self.assertTrue(os.path.exists(out))
         self.assertTrue(tier.pipe_compress('{"a": [1, 2,', "auto").startswith("%tier"))
@@ -1794,6 +1800,32 @@ class PerfAndSafety(unittest.TestCase):
             self.assertIn("max_section_tokens", str(ctx.exception))
             tier.remember(path, "rule", text="r2")
             self.assertIn("r2", self_read(path))
+
+    def test_sync_fingerprint_matches_crlf_checkout(self):
+        """A CRLF checkout must not look changed on every sync.
+
+        The reader normalizes newlines, so a fingerprint recorded from the text
+        length would never match a Windows (or autocrlf) working tree.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            for name, body in (("one.py", "def one():\n    return 1\n"),
+                               ("two.py", "def two():\n    return 2\n")):
+                with open(os.path.join(td, name), "wb") as f:
+                    f.write(body.replace("\n", "\r\n").encode("utf-8"))
+            path = os.path.join(td, "repo.tier")
+            _put(td, "repo.tier", tier.dumps(tier.from_repo(td)))
+            reads = []
+            original = tier.repo._read_text
+
+            def spy(p):
+                reads.append(os.path.relpath(p, td))
+                return original(p)
+
+            with __import__("unittest").mock.patch.object(tier.repo, "_read_text", spy):
+                res = tier.sync_repo(path, root=td)
+            self.assertEqual(res["changed"], [])
+            self.assertFalse(res["written"])
+            self.assertEqual(reads, [])
 
     def test_sync_repo_stat_short_circuit(self):
         with tempfile.TemporaryDirectory() as td:

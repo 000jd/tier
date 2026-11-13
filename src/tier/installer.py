@@ -6,6 +6,7 @@ import json
 import os
 import shlex
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
@@ -232,19 +233,53 @@ def _merge_server(spec: ClientSpec, root: str, dry_run: bool, changes: List[Chan
     _save_json(spec.config_path, data, dry_run, changes)
 
 
+def _command_tokens(cmd: str) -> List[str]:
+    """Split a hook command line into tokens without assuming POSIX quoting.
+
+    Windows hook commands are written with double quotes (or with shlex-style
+    single quotes from older releases), so a plain shlex.split is not enough.
+    """
+    try:
+        parts = shlex.split(cmd, posix=not sys.platform.startswith("win"))
+    except ValueError:
+        parts = cmd.split()
+    return [p.strip("'\"") for p in parts if p.strip("'\"")]
+
+
 def _is_tier_hook(cmd) -> bool:
+    """True for `tier hook`, `python -m tier hook`, and `tier.py hook`.
+
+    Matches on tokens rather than substrings so quoted executable paths such as
+    `'C:\\Program Files\\tier' hook` are still recognized.
+    """
     if not isinstance(cmd, str):
         return False
-    return "-m tier hook" in cmd or "tier.py hook" in cmd or "tier hook" in cmd
+    parts = _command_tokens(cmd)
+    if not parts:
+        return False
+    norm = [p.replace("\\", "/").lower() for p in parts]
+    if any(os.path.basename(n) in ("tier", "tier.exe", "tier.py", "tier.cmd") for n in norm):
+        return "hook" in norm
+    for i, token in enumerate(norm):
+        if token == "-m" and i + 1 < len(norm) and norm[i + 1] in ("tier", "tier.mcp"):
+            return "hook" in norm
+    return False
+
+
+def _quote_command(parts: List[str]) -> str:
+    """Quote a hook command for the host shell, not always for POSIX."""
+    if sys.platform.startswith("win"):
+        return subprocess.list2cmdline(parts)
+    return shlex.join(parts)
 
 
 def _hook_command(find_executable=None) -> str:
     find_executable = find_executable or shutil.which
     exe = find_executable("tier")
     if exe:
-        return shlex.join([os.path.abspath(exe), "hook", "--max-tokens", "600"])
+        return _quote_command([os.path.abspath(exe), "hook", "--max-tokens", "600"])
     python = sys.executable or find_executable("python3") or "python3"
-    return shlex.join([os.path.abspath(python), "-m", "tier", "hook", "--max-tokens", "600"])
+    return _quote_command([os.path.abspath(python), "-m", "tier", "hook", "--max-tokens", "600"])
 
 
 def _filter_hooks(post: list, desired: str, uninstall: bool = False):
