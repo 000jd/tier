@@ -167,6 +167,26 @@ Track descriptions, methodology, and how to read the output are in [benchmarks/R
 
 `benchmarks/agent_ab.py` is a separate comparison (Track J): it runs the same agent workflow against a plain repository and against its TIER map and reports the tokens each turn spends. It writes to stdout and does not touch the checked-in transcript.
 
+## Publishing a release
+
+Tagging `v*` runs `.github/workflows/release.yml`: it verifies the tree, builds the sdist and
+wheel, then publishes to PyPI through Trusted Publishing. No API token is stored.
+
+The publish job fails with `invalid-publisher` until the project has a Trusted Publisher on PyPI.
+Configure it once at <https://pypi.org/manage/account/publishing/> with:
+
+| Field | Value |
+|---|---|
+| PyPI project name | `tier-ctx` |
+| Owner | `000jd` |
+| Repository | `tier` |
+| Workflow filename | `release.yml` |
+| Environment | `pypi` |
+
+The first release may use a "pending publisher": the project does not have to exist on PyPI yet.
+Until it is configured, the verify and build jobs still pass, so a red Release run with those two
+green means only the publisher is missing.
+
 ## Refreshing checked-in artifacts
 
 Four `.tier` files and one benchmark transcript are checked in. Regenerate them after changing parsers, converters, symbol extraction, repository behavior, the CLI surface, or the benchmarks:

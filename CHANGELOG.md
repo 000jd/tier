@@ -15,12 +15,12 @@ The distribution is published as `tier-ctx`; the import package, the CLI command
 
 ### Changed
 
-- `tier_context` filters `|calls` tables to the 1-hop symbol neighbourhood of the sections it returns, which leaves more of the budget for L2 bodies and L3 slices. Pass `include_calls="all"` to opt out and emit every recorded edge. `tier impact` is unaffected and always reports the full caller and callee set.
+- `tier_context` narrows `|calls` tables at render time: by default it keeps only edges whose caller is one of the matched symbols, leaving more of the budget for L2 bodies and L3 slices. `include_calls="all"` emits every recorded edge and `"none"` omits the table. The stored map and `tier impact` are unchanged and always carry the full caller and callee set.
 - The format specification moved from `SPEC.md` to `docs/spec.md`. `SPEC.tier` is built from the new path and every link now points there.
 
 ### Fixed
 
-- The repository cache resolves through a `.git` pointer file. Linked `git worktree` checkouts and submodules previously fell through to the per-root user cache because `.git` is not a directory there; they now place the map under their own git directory, and the owning root is recovered from the `.owner` manifest rather than from a literal `.git/info/tier/` path.
+- The repository cache resolves through a `.git` pointer file. Linked `git worktree` checkouts and submodules previously fell through to the per-root user cache because `.git` is not a directory there; they now place the map under their own git directory, and the owning root is recovered from the `.owner` manifest rather than from a literal `.git/info/tier/` path. Each checkout keeps its own map on purpose: worktrees hold different branches, so a shared map would be invalidated on every switch.
 
 ## [1.1.0]
 
