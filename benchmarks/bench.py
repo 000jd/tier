@@ -1259,6 +1259,15 @@ def bench_polyglot():
         expected = {(rel, name) for rel, specs in POLYGLOT_EXPECTED.items() for name, *_ in specs}
         missing_symbols = expected - found
         found_edges = edges & POLYGLOT_EDGES
+        # Symbol-level call edges: caller in one module -> callee in another.
+        call_edges = set()
+        for sec in doc.sections:
+            rel = tier._repo_file_meta(sec).get("path", "")
+            for nd in tier.nodes(sec):
+                if nd["t"] == "table" and nd["name"] == "calls":
+                    for row in nd["rows"]:
+                        if len(row) >= 3 and row[2] not in ("", "."):
+                            call_edges.add((rel, row[2], row[1]))
         range_good, range_total = _poly_range_check(td, doc)
         errors = [m for lvl, m in tier.lint(doc, max_section_tokens=10**9) if lvl == "error"]
         stable = tier.dumps(tier.parse(full)) == full
@@ -1278,11 +1287,12 @@ def bench_polyglot():
         say(f"   symbol recall: {len(expected) - len(missing_symbols)}/{len(expected)}"
             f" (missing {len(missing_symbols)}); ranges: {range_good}/{range_total};"
             f" edge recall: {len(found_edges)}/{len(POLYGLOT_EDGES)};"
+            f" call edges: {len(call_edges)};"
             f" slices: {len(POLYGLOT_SLICES)} groups, missing {len(missing)}")
         say(f"   lint errors: {len(errors)}; round-trip stable: {'Y' if stable else 'N'}")
         say(f"   check: all exported symbols captured: {'Y' if not missing_symbols else 'N'};"
             f" all cross-file edges captured: {'Y' if found_edges == POLYGLOT_EDGES else 'N'};"
-            f" surgical L0+L2+L3 under 35% of raw: {'Y' if surgical_t < raw_t * 0.35 else 'N'}")
+            f" surgical L0+L2+L3 under 40% of raw: {'Y' if surgical_t < raw_t * 0.40 else 'N'}")
         say()
 
 

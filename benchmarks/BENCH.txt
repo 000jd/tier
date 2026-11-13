@@ -85,26 +85,26 @@ ledger write failure stop deploys    deploying            N    alerts           
 F. codebase -> TIER graph index (this TIER project)
 measure                 sections  tokens  vs raw source
 ----------------------  --------  ------  -------------
-raw source files        20        63858   -            
-repo.tier full          20        8718    86% fewer    
-repo.tier L0            20        727     99% fewer    
-L0 + parser.py + 1-hop  1         1494    98% fewer    
-   symbols: 259 expected, 259 in map, missing 0; internal edges: 76; lint errors: 0; round-trip stable: Y
+raw source files        22        72859   -            
+repo.tier full          22        14375   80% fewer    
+repo.tier L0            22        828     99% fewer    
+L0 + parser.py + 1-hop  1         1784    98% fewer    
+   symbols: 293 expected, 293 in map, missing 0; internal edges: 90; lint errors: 0; round-trip stable: Y
    check: L0 + 1-hop >=70% fewer than raw: Y; exported names preserved: Y
    Modules keep exact line ranges and '>' edges, so tier_get --follow returns dependency signatures.
 
 G. end-to-end 4-layer coding workflow (read, locate, signatures, slices, impact/sync)
 step                                tokens
 ----------------------------------  ------
-1. L0 repo index                    727   
+1. L0 repo index                    828   
 2. hybrid find -> module            34    
-3. L2 signatures + 1-hop            767   
+3. L2 signatures + 1-hop            956   
 4. L3 slices: parse, from_md, find  2984  
-5. impact + incremental sync        185   
-TOTAL workflow                      4697  
-raw source baseline                 63858 
-full repo.tier baseline             8718  
-   savings vs raw source: 92.6%; vs full repo.tier: +46.1%
+5. impact + incremental sync        201   
+TOTAL workflow                      5003  
+raw source baseline                 72859 
+full repo.tier baseline             14375 
+   savings vs raw source: 93.1%; vs full repo.tier: +65.2%
    exact L3 slices: 3/3; impact dependents: 10/10; incremental sync after edit: Y
    check: total workflow >85% under raw source: Y
 
@@ -112,13 +112,13 @@ H. polyglot repository map (Python, TypeScript, Go, Rust)
 measure                       sections  tokens  vs raw   
 ----------------------------  --------  ------  ---------
 raw polyglot source           36        8249    -        
-repo.tier full L2             36        5636    32% fewer
+repo.tier full L2             36        6267    24% fewer
 L0 index                      36        1036    87% fewer
-L0 + full L2 + 7 L3 slices    36        7141    13% fewer
-L0 + target L2 + 7 L3 slices  5         2854    65% fewer
-   symbol recall: 116/116 (missing 0); ranges: 116/116; edge recall: 10/10; slices: 5 groups, missing 0
+L0 + full L2 + 7 L3 slices    36        7771    6% fewer 
+L0 + target L2 + 7 L3 slices  5         3008    64% fewer
+   symbol recall: 116/116 (missing 0); ranges: 116/116; edge recall: 10/10; call edges: 6; slices: 5 groups, missing 0
    lint errors: 0; round-trip stable: Y
-   check: all exported symbols captured: Y; all cross-file edges captured: Y; surgical L0+L2+L3 under 35% of raw: Y
+   check: all exported symbols captured: Y; all cross-file edges captured: Y; surgical L0+L2+L3 under 40% of raw: Y
 
 I. blind retrieval over a merged 50+ section corpus (runbook + handbook + SPEC + GitHub docs)
 query                                     top-1 section                        hit@1  tok@1  hit@2  tok@2
@@ -133,13 +133,13 @@ what must I never log                     rb-security-rules                    Y
 how many replicas in prod-eu              rb-environments                      Y      117    Y      337  
 session deduplication invalidates slices  spec-session-deduplication           Y      117    Y      348  
 what closes a named guard block           spec-safety                          Y      197    Y      333  
-what does tier_impact report for blast r  spec-mcp-server                      Y      312    Y      472  
+what does tier_impact report for blast r  spec-mcp-server                      Y      334    Y      494  
 how do I run the test suite               express_readme-running-tests         Y      35     Y      168  
 how do I install prerequisites on Window  node_building-windows-prerequisites  Y      70     Y      128  
 max size of ccache cache                  pytorch_contributing-max-size-cache  Y      29     Y      197  
 skip CI while iterating PR title          pytorch_contributing-skip-ci-while   Y      337    Y      469  
-   corpus sections: 198; full corpus 53353 tokens; L0 index 5916 tokens
+   corpus sections: 201; full corpus 53931 tokens; L0 index 6004 tokens
    hit@1 15/15, hit@2 15/15, answer string present in top-1: 15/15
-   mean top-1 fetch 134 tokens; mean L0 + top-1 6050 tokens (89% below full-corpus loading)
+   mean top-1 fetch 136 tokens; mean L0 + top-1 6140 tokens (89% below full-corpus loading)
    check: hit@1 >= 14/15: Y; mean L0+top-1 under 20% of full corpus: Y
 

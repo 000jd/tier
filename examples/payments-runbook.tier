@@ -1,4 +1,4 @@
-%tier 1.0.1
+%tier 1.1.0
 %title Payments API Runbook
 %sum This runbook covers deploying, operating, and debugging the Payments API, the service that authorizes card payments and writes ledger entries for the checkout flow.
 @overview Overview

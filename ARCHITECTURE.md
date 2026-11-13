@@ -27,6 +27,8 @@ src/tier/
 ├── lint.py            table/reference/size validation
 ├── converter.py       Markdown/JSON -> TIER, TIER -> Markdown
 ├── retrieval.py       L0 index, hybrid search, get, Session deduplication
+├── cache.py           repository-index cache resolution (.git/info or user cache)
+├── context.py         one-turn composite retrieval: route, pack L2/L3, impact
 ├── repo.py            polyglot repo maps, symbol extraction, sync, L3 slices, impact
 ├── memory.py          atomic, lint-checked write-back memory
 ├── pipe.py            stream/log compression and Claude Code JSON hook
@@ -38,7 +40,7 @@ src/tier/
 └── mcp/
     ├── __init__.py
     ├── __main__.py    python -m tier.mcp
-    ├── server.py      zero-dependency JSON-RPC 2.0 MCP server (11 tools)
+    ├── server.py      zero-dependency JSON-RPC 2.0 MCP server (12 tools)
     └── sdk_server.py  optional official MCP SDK adapter (MCPServer / FastMCP fallback)
 ```
 
@@ -55,6 +57,8 @@ Dependencies point one way; there are no import cycles. The optional `ui` and `m
 | `lint` | `models`, `parser`, `tokens` |
 | `converter` | `models`, `parser` |
 | `retrieval` | `models`, `parser`, `tokens` |
+| `cache` | `models`, `parser`, `repo` |
+| `context` | `cache`, `models`, `parser`, `repo`, `retrieval`, `tokens` |
 | `repo` | `converter`, `models`, `parser`, `retrieval` |
 | `memory` | `lint`, `models`, `parser` |
 | `pipe` | `converter`, `models`, `parser`, `retrieval`, `tokens` |
@@ -74,11 +78,13 @@ Dependencies point one way; there are no import cycles. The optional `ui` and `m
 4. `retrieval.get` renders sections; `Session` replaces repeated bodies and L3 slices with stubs.
 5. `converter` and `pipe` create TIER from Markdown, JSON, logs, and hook payloads.
 
-### Repositories: map -> slice -> sync -> impact
+### Repositories: map -> cache -> slice -> sync -> impact
 1. `repo.from_repo` scans source files, extracts Python AST symbols plus JS/TS/Go/Rust regex symbols, records fingerprints, and creates `>` edges for local imports.
 2. `repo.slice_symbols` resolves a module and symbol, checks the real path against the root, and reads only the recorded source lines.
 3. `repo.sync_repo` reparses changed/added files, removes deleted modules and references, refreshes ranges, and invalidates affected session entries.
-4. `repo.impact` inverts the graph and optionally compares `repo.tier` symbols with Git changes.
+4. `repo.impact` inverts the module graph, reads the `calls` tables for symbol-level callers,
+   and optionally compares `repo.tier` symbols with Git changes.
+5. `repo.sync_repo` skips files whose recorded mtime and size are unchanged, and rehashes on demand.
 
 ### Installer and diagnostics
 1. `installer.client_specs` resolves project/user config paths for Claude Code, Claude Desktop, Cursor, VS Code, and Windsurf.
@@ -86,8 +92,8 @@ Dependencies point one way; there are no import cycles. The optional `ui` and `m
 3. `doctor.run_doctor` checks the interpreter, entrypoints, tokenizer, repo health, sync freshness, and every detected client config.
 
 ### MCP
-- `mcp/server.py` is the default stdio JSON-RPC server (`tier-mcp`, `python -m tier.mcp`). It has no dependencies and auto-syncs repository maps.
-- `mcp/sdk_server.py` is optional. It wraps the same 11 tools with MCP v2 `MCPServer` (v1 `FastMCP` fallback) for `tier-mcp-sdk`, `mcp dev`, and Streamable HTTP.
+- `mcp/server.py` is the default stdio JSON-RPC server (`tier-mcp`, `python -m tier.mcp`). It has no dependencies and auto-syncs repository maps. `tier_context` is listed first and performs routing, L2/L3 packing, and impact summary in one call.
+- `mcp/sdk_server.py` is optional. It wraps the same 12 tools with MCP v2 `MCPServer` (v1 `FastMCP` fallback) for `tier-mcp-sdk`, `mcp dev`, and Streamable HTTP.
 
 ## Contributor guide
 

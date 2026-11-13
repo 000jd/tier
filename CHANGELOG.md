@@ -1,0 +1,72 @@
+# Changelog
+
+Notable changes to TIER, newest first. Entries follow the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): one `##` heading per released version, `### Added` / `### Changed` / `### Fixed` subsections, and bullets that describe behavior rather than line counts. Versions follow [semantic versioning](https://semver.org/); dates are omitted because releases are cut from tags.
+
+The distribution is published as `tier-ctx`; the import package, the CLI command, and the format extension are all `tier`.
+
+## [1.1.0]
+
+### Added
+
+- `tier_context` MCP tool and `tier context` CLI command: one-turn composite retrieval that resolves the target, routes with the hybrid retriever, packs matched sections, L3 slices, and a compact impact summary, and stops at a token budget. `--budget-tokens`, `--no-impact`, and `--no-dedup` are exposed on the CLI.
+- Invisible, auto-managed repository cache (`src/tier/cache.py`). A map resolves to a tracked `<root>/repo.tier` when one exists, otherwise to `<root>/.git/info/tier/repo.tier` inside a worktree, otherwise to a per-root directory under `~/.cache/tier/`. `repo.tier` no longer needs to be tracked, and `git status` stays clean either way.
+- Symbol-level call-graph edges, emitted as a `|calls[N]{caller,callee,module}` table per module, and symbol impact reporting: `tier impact module#symbol` reports exact symbol callers and callees in addition to module-level blast radius.
+- Optional `[treesitter]` extra (`tree-sitter-language-pack`) for AST symbol extraction across TypeScript, JavaScript, Go, Rust, C, C++, Java, and Ruby. The stdlib extractors remain the default and the fallback; `tier doctor` reports which is in use.
+- Installer catalog expands from five host families to 25 clients across seven schemas (`mcpServers`, `servers`, `opencode`, `context_servers`, `codex-toml`, `continue-yaml`, `skill-md`), covering JSON, TOML, YAML, and `SKILL.md` targets.
+- Documentation split: `docs/cli.md`, `docs/mcp.md`, `benchmarks/README.md`, `CONTRIBUTING.md`, and this file now carry reference material that had been accumulating in the README.
+
+### Changed
+
+- `tier install` warms the resolved cache location instead of writing a visible `repo.tier` into the working tree.
+- Path arguments on `context`, `slice`, `impact`, `sync`, and `install` are optional and default to the cache.
+- The MCP tool surface grows from 11 to 12 tools. Both servers (`mcp/server.py` and `mcp/sdk_server.py`) expose the same set, and `tier_context` is registered first.
+
+## [1.0.1]
+
+### Changed
+
+- `tier hook` treats its token budget as a contract. The previous characters/4 gate could under-count dense code by up to 2.34x and pass a payload over budget; the hook now counts exactly, emits only a budget-fitted compression, and reports whether the count was exact or estimated. `--fast` opts back into estimator-only counting and is documented as best-effort.
+- `tier sync --rehash` ignores the `mtime`+`size` fast path and compares content hashes for every file, which catches same-size edits whose timestamps were restored by `rsync -a`, `cp -p`, or a tar extraction.
+- Renamed the distribution to `tier-ctx`. The `tier`, `tier-mcp`, and `tier-mcp-sdk` entry points are unchanged.
+- CI runs a 12-job matrix: three operating systems by four Python versions (3.10 through 3.13).
+
+### Fixed
+
+- CRLF checkouts no longer produce permanent sync churn: fingerprints use on-disk byte size rather than decoded length.
+- Impact analysis resolves a symlinked root correctly instead of reporting dependents against the wrong prefix.
+- Hook settings written on Windows are quoted correctly for the shell that reads them.
+
+## [1.0.0]
+
+### Added
+
+- The four-layer format in its current form: L0 title, summary, rules, and index; L1 abstracts; L2 signatures, metadata, key/value trees, tables, and `>` edges; L3 exact source lines for one symbol.
+- Polyglot repository maps: `tier from-repo` indexes Python, JavaScript, TypeScript, Go, and Rust into a layered architecture map with exact line ranges, and `tier slice` returns the L3 lines for a named symbol.
+- Impact analysis: `tier impact` inverts the dependency graph, reports direct and transitive dependents, and optionally compares against Git changes.
+- Session deduplication: repeated section bodies and slices are replaced with a one-line stub instead of being resent.
+- Universal installer: `tier install` detects supported hosts and configures each one, with backups, dry-run, focused uninstall, and `tier doctor` validation.
+- MCP server: a dependency-free stdio JSON-RPC implementation with 11 tools, plus an optional official-SDK adapter for `tier-mcp-sdk` and Streamable HTTP.
+- Benchmarks: a nine-track suite covering records, nested config, runbook retrieval, real-world Markdown, paraphrase retrieval, the self-index, the end-to-end workflow, a polyglot fixture, and blind retrieval.
+
+## [0.3.0]
+
+### Added
+
+- Hybrid retrieval: identifier splitting, synonyms, BM25-style weights, trigram fallback, and table-field boosts replace exact-prefix matching.
+- Stateful write-back memory through `tier remember`, with lint-checked, atomic file updates and size bounds.
+- `tier pipe` and `tier hook` for compressing logs, JSON, and tool payloads.
+- The installer: per-client config merging, backups, dry-run, and uninstall.
+
+## [0.2.0]
+
+### Added
+
+- Sections with ids, titles, and abstracts, so a document has an addressable structure.
+- Tables with declared row counts and escape rules; references (`>` edges) between sections.
+- Retrieval: the L0 index, `tier find`, and `tier get` with dependency following.
+
+## [0.1.0]
+
+### Added
+
+- Initial format: the line sigils, the key/value and untrusted-guard grammar, the parser, the serializer, and the linter.

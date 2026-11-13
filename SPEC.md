@@ -1,10 +1,10 @@
-# TIER v1.0.1
+# TIER v1.1.0
 
 TIER (Tiered Information for Efficient Retrieval) is a line-oriented text format plus a local context, memory, and code-navigation engine for AI agents. File extension: `.tier`. Encoding: UTF-8, LF line endings. The reference implementation is a Python 3.10+ package in a `src/` layout and uses the standard library only.
 
 ## Package layout
 
-The installable package lives under `src/tier/`: `models.py` (dataclasses, constants, path/IO helpers), `parser.py` (line parser, nodes, serializer, untrusted guards), `converter.py` (Markdown/JSON), `retrieval.py` (index, hybrid search, get, session cache), `repo.py` (polyglot repo maps, sync, L3 slices, impact), `memory.py`, `pipe.py`, `lint.py`, `tokens.py`, `plugin.py`, `installer.py` (interactive setup and safe config merging), `doctor.py` (health checks), `ui.py` (ANSI/rich rendering), `cli.py`, `mcp/server.py`, and the optional `mcp/sdk_server.py`. `tests/` holds the unit and red-team suite; `benchmarks/` holds Tracks A-I and the optional Node token counter; `examples/` holds sample documents.
+The installable package lives under `src/tier/`: `models.py` (dataclasses, constants, path/IO helpers), `parser.py` (line parser, nodes, serializer, untrusted guards), `converter.py` (Markdown/JSON), `retrieval.py` (index, hybrid search, get, session cache), `repo.py` (polyglot repo maps, sync, L3 slices, impact), `cache.py` (repository-index cache resolution), `context.py` (one-turn composite retrieval), `memory.py`, `pipe.py`, `lint.py`, `tokens.py`, `plugin.py`, `installer.py` (interactive setup and safe config merging), `doctor.py` (health checks), `ui.py` (ANSI/rich rendering), `cli.py`, `mcp/server.py`, and the optional `mcp/sdk_server.py`. `tests/` holds the unit and red-team suite; `benchmarks/` holds Tracks A-I and the optional Node token counter; `examples/` holds sample documents.
 
 ## Design rationale
 
@@ -72,7 +72,7 @@ A key/value block ends at the first line that is not indented. All scalars are s
 ## Document shape
 
 ```
-%tier 1.0.1
+%tier 1.1.0
 %title Payments API Runbook
 %sum Deploying, operating, and debugging the payments API
 %rule Never log card numbers
@@ -244,17 +244,55 @@ Client config paths are platform-aware: Claude Desktop uses `~/Library/Applicati
 
 The installer prefers an absolute `tier-mcp` executable and otherwise uses the absolute current interpreter with `-m tier.mcp`. Before modifying any existing config it creates `<file>.bak` and writes atomically. Unrelated servers, keys, hooks, and instruction blocks are preserved; repeated installs are idempotent. When Gemini CLI is selected, `GEMINI.md` receives the same `TIER:BEGIN`/`TIER:END` block as `CLAUDE.md` and `AGENTS.md`. `--uninstall` removes only the `tier` entry, TIER hook commands, and TIER instruction blocks. When `repo.tier` is generated or synced, the summary reports raw-source tokens, L0 tokens, and the measured percentage.
 
+## Composite retrieval
+
+`tier context QUERY [PATH]` (MCP `tier_context`) answers a question in one call instead of
+`index` -> `find` -> `get` -> `slice`. It resolves the target, building or syncing the map if
+needed, routes with the hybrid retriever, and matches query tokens against symbol names. It then
+packs, in priority order, the top section bodies, the L3 slices for matched symbols, and a compact
+dependency summary, stopping before `budget_tokens` (default 3000) is exceeded. Section bodies and
+slices already delivered in the session are emitted as one-line stubs.
+
+`tier_context` is listed first in `tools/list` and is the intended default entry point; the
+granular tools remain available for precise control.
+
+## Repository cache
+
+The repository map is a derived artifact and is cached rather than required in the tree. Resolution
+order for a directory target:
+
+1. An explicit `.tier` path.
+2. `<root>/repo.tier`, when it exists, so a checked-in map keeps working.
+3. `<root>/.git/info/tier/repo.tier` when `.git` is a directory (Git ignores this path, so
+   `git status` stays clean).
+4. `<cache-root>/<sha256(realpath(root))[:12]>/repo.tier`, where `<cache-root>` is
+   `$TIER_CACHE_DIR`, the platform cache directory, or `~/.cache/tier`.
+
+A `.owner` file beside an out-of-tree map records its repository, so slices and impact read source
+files from the right place. Reads auto-build on first use and auto-sync afterwards.
+
+## Call graph
+
+Each module section may carry a `|calls[N]{caller,callee,module}` table recording symbol-level
+call edges. Python edges come from the `ast` module (name and `self`/`cls`/`this`/`super` attribute
+calls); JS/TS/Go/Rust edges come from scanning each symbol's body with string and comment
+stripping. `module` is a relative path, or `.` for a call within the same module, so edges survive
+section-id reassignment.
+
+`tier impact PATH MODULE#SYMBOL` reports file-level importers plus `Symbol callers:` and
+`Symbol calls:` lines naming the exact calling functions with their line ranges.
+
 ## Diagnostics
 
 `tier doctor [ROOT]` checks Python version, `tier`/`tier-mcp` entrypoints, optional Node/`gpt-tokenizer` availability, the target directory, `repo.tier` presence, lint errors, sync freshness, TIER hooks, and the optional `mcp` extra. Every detected client config is validated in its own schema — JSON `mcpServers`, VS Code `servers`, OpenCode `mcp`, Zed `context_servers`, Codex TOML, Continue YAML, and `SKILL.md` — checking the command, its existence, and that the registered root matches. It renders a PASS/WARN/FAIL table; `--json` emits machine-readable checks. The exit code is nonzero only when a check fails.
 
 ## Optional official SDK adapter
 
-`pip install "tier-ctx[mcp]"` enables `tier-mcp-sdk` and `python -m tier.mcp.sdk_server`. The adapter wraps all 11 tools with the official SDK's v2 `MCPServer` (falling back to v1 `FastMCP`). It supports `--transport stdio`, `--transport streamable-http --host HOST --port PORT`, and `mcp dev` via the module-level `mcp`/`server` object. If the extra is missing, it prints the exact install command and exits nonzero without a traceback. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib implementation.
+`pip install "tier-ctx[mcp]"` enables `tier-mcp-sdk` and `python -m tier.mcp.sdk_server`. The adapter wraps all 12 tools with the official SDK's v2 `MCPServer` (falling back to v1 `FastMCP`). It supports `--transport stdio`, `--transport streamable-http --host HOST --port PORT`, and `mcp dev` via the module-level `mcp`/`server` object. If the extra is missing, it prints the exact install command and exits nonzero without a traceback. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib implementation.
 
 ## Packaging
 
-`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.0.1` with no required third-party dependencies and three console scripts:
+`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.1.0` with no required third-party dependencies and three console scripts:
 
 | Command | Entry point |
 |---|---|
@@ -262,7 +300,7 @@ The installer prefers an absolute `tier-mcp` executable and otherwise uses the a
 | `tier-mcp` | `tier.mcp.server:main` |
 | `tier-mcp-sdk` | `tier.mcp.sdk_server:main` |
 
-Optional extras: `ui = ["rich>=13.0"]` for rich terminal rendering, `mcp = ["mcp>=2.0"]` for the official SDK adapter, and `all` for both. The default install remains stdlib-only.
+Optional extras: `treesitter = ["tree-sitter-language-pack>=0.7.0"]` for multi-language AST extraction, `ui = ["rich>=13.0"]` for rich terminal rendering, `mcp = ["mcp>=2.0"]` for the official SDK adapter, and `all` for both. The default install remains stdlib-only.
 
 `pyproject.toml` uses the PEP 621 `src` layout and packages only `src/tier` (plus `src/tier/mcp`); tests, benchmarks, corpus data, and `node_modules` are not bundled. Install from Git with `uv tool install git+https://github.com/000jd/tier` or `pipx install git+https://github.com/000jd/tier`, or from a checkout inside a virtualenv with `pip install -e . --no-build-isolation`. The bare PyPI name `tier` belongs to an unrelated stub package; the distribution is published as `tier-ctx` when installing from an index. `benchmarks/count.mjs` and its persistent `benchmarks/count-server.mjs` worker via Node remain optional for exact `o200k_base` counts; repeated strings are served from an in-memory content-hash cache and one Node process serves a whole session. Without Node, including in an installed wheel, TIER uses a character estimate.
 
@@ -284,10 +322,11 @@ The `tier` console script and `python -m tier` are equivalent.
 
 ## MCP server
 
-Run the stdio server with `tier-mcp /path/to/root` or `python -m tier.mcp /path/to/root`. It exposes eleven tools:
+Run the stdio server with `tier-mcp /path/to/root` or `python -m tier.mcp /path/to/root`. It exposes twelve tools:
 
 | Tool | Purpose |
 |---|---|
+| `tier_context` | one-turn composite: route, pack L2 + L3, and summarize impact |
 | `tier_list` | discover `.tier` docs under the root |
 | `tier_index` | L0 + section index, with auto-sync |
 | `tier_find` | hybrid identifier/fuzzy search, with auto-sync |
@@ -302,7 +341,7 @@ Run the stdio server with `tier-mcp /path/to/root` or `python -m tier.mcp /path/
 
 Paths are confined to the configured root. `tier_get` and `tier_slice` share a session cache; `tier_sync` and any auto-sync invalidate changed sections and L3 slice entries.
 
-With `tier-ctx[mcp]`, `tier-mcp-sdk` / `python -m tier.mcp.sdk_server` exposes the same 11 tools through the official SDK for MCP Inspector (`mcp dev`) and Streamable HTTP. The default server remains the stdlib JSON-RPC implementation.
+With `tier-ctx[mcp]`, `tier-mcp-sdk` / `python -m tier.mcp.sdk_server` exposes the same 12 tools through the official SDK for MCP Inspector (`mcp dev`) and Streamable HTTP. The default server remains the stdlib JSON-RPC implementation.
 
 ## Author guidelines
 
@@ -330,7 +369,7 @@ The reference converter maps headings to sections, Markdown tables to `|` tables
 
 ## Benchmarks
 
-See `benchmarks/BENCH.txt` for the full A-I output. TIER v1.0.1 measures:
+See `benchmarks/BENCH.txt` for the full A-I output. TIER v1.1.0 measures:
 
 - A/B: TIER tables match CSV at about 61 percent fewer tokens than pretty JSON. TIER key/value is 39 percent below pretty JSON and 13 percent below YAML; compact JSON is still smaller.
 - C: 8/8 `hit@1` on the payments runbook, 352-token L0 index, and L0 + top-1 + session dedup below full Markdown at all eight questions.
@@ -344,7 +383,7 @@ See `benchmarks/BENCH.txt` for the full A-I output. TIER v1.0.1 measures:
 
 ## Backward compatibility
 
-TIER v1.0.1 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.0.1`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable.
+TIER v1.1.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.1.0`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable.
 
 ## Non-goals
 
