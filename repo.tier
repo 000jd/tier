@@ -142,18 +142,18 @@ function,to_md,def to_md(doc: Doc) -> str,408-451
 = file
   path src/tier/doctor.py
   language python
-  lines 200
-  sha256 eba96b4d296e4440
-  mtime 1794555400141049236
-  size 8523
+  lines 203
+  sha256 274cf365acfd0d80
+  mtime 1794556342751655988
+  size 8765
 |symbols[7]{kind,name,signature,lines}
 class,Check,class Check,22-26
 function,_check_entry,"def _check_entry(spec: ClientSpec, root: str, find_executable) -> Check",29-64
 function,_hook_check,def _hook_check(spec: ClientSpec) -> Optional[Check],67-86
-function,run_doctor,"def run_doctor(root: str='.', home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, find_executable=None) -> List[Check]",89-181
-function,exit_code,def exit_code(checks: Sequence[Check]) -> int,184-185
-function,render,"def render(checks: Sequence[Check], ui: UI) -> None",188-196
-function,render_json,def render_json(checks: Sequence[Check]) -> str,199-200
+function,run_doctor,"def run_doctor(root: str='.', home: Optional[str]=None, env: Optional[dict]=None, platform: Optional[str]=None, find_executable=None) -> List[Check]",89-184
+function,exit_code,def exit_code(checks: Sequence[Check]) -> int,187-188
+function,render,"def render(checks: Sequence[Check], ui: UI) -> None",191-199
+function,render_json,def render_json(checks: Sequence[Check]) -> str,202-203
 > src-tier-installer.py
 > src-tier-lint.py
 > src-tier-parser.py
@@ -590,11 +590,11 @@ function,main,def main(),450-480
 = file
   path tests/test_installer.py
   language python
-  lines 794
-  sha256 f1a90f40f118473e
-  mtime 1794555681205935073
-  size 42263
-|symbols[43]{kind,name,signature,lines}
+  lines 817
+  sha256 ff3a94deff68ad42
+  mtime 1794556430279612749
+  size 43716
+|symbols[44]{kind,name,signature,lines}
 function,_ui,def _ui(),22-23
 function,_put,"def _put(root, name, text)",26-31
 function,_read,def _read(path),34-36
@@ -614,30 +614,31 @@ method,InstallerTests.test_orphan_end_marker_is_preserved,def test_orphan_end_ma
 method,InstallerTests.test_balanced_markers_replace_in_place,def test_balanced_markers_replace_in_place(self),292-310
 method,InstallerTests.test_setup_alias_cli,def test_setup_alias_cli(self),312-322
 method,InstallerTests.test_interactive_selection_and_yes_default,def test_interactive_selection_and_yes_default(self),324-343
-class,MultiAgentTests,class MultiAgentTests(unittest.TestCase),346-647
+class,MultiAgentTests,class MultiAgentTests(unittest.TestCase),346-652
 method,MultiAgentTests.test_catalog_covers_all_documented_clients,def test_catalog_covers_all_documented_clients(self),349-359
-method,MultiAgentTests.test_exact_paths_and_schemas,def test_exact_paths_and_schemas(self),361-390
-method,MultiAgentTests.test_open_code_uses_mcp_key_and_command_list,def test_open_code_uses_mcp_key_and_command_list(self),392-418
-method,MultiAgentTests.test_codex_toml_preserves_other_tables_and_uninstalls_cleanly,def test_codex_toml_preserves_other_tables_and_uninstalls_cleanly(self),420-456
-method,MultiAgentTests.test_zed_context_servers_shape,def test_zed_context_servers_shape(self),458-480
-method,MultiAgentTests.test_continue_yaml_written_and_removed,def test_continue_yaml_written_and_removed(self),482-500
-method,MultiAgentTests.test_skill_md_has_frontmatter_and_tool_docs,def test_skill_md_has_frontmatter_and_tool_docs(self),502-519
-method,MultiAgentTests.test_gemini_writes_settings_and_gemini_md,def test_gemini_writes_settings_and_gemini_md(self),521-532
-method,MultiAgentTests.test_every_json_client_installs_and_uninstalls,def test_every_json_client_installs_and_uninstalls(self),534-559
-method,MultiAgentTests.test_custom_config_json_toml_yaml_and_skill,def test_custom_config_json_toml_yaml_and_skill(self),561-586
-method,MultiAgentTests.test_custom_config_schema_inference_and_validation,def test_custom_config_schema_inference_and_validation(self),588-595
-method,MultiAgentTests.test_detected_selection_shortcut,def test_detected_selection_shortcut(self),597-612
-method,MultiAgentTests.test_print_config_covers_every_schema,def test_print_config_covers_every_schema(self),614-620
-method,MultiAgentTests.test_cli_custom_config_and_snippet_commands,def test_cli_custom_config_and_snippet_commands(self),622-647
-class,DoctorTests,class DoctorTests(unittest.TestCase),650-705
-method,DoctorTests._healthy,"def _healthy(self, root, home)",651-661
-method,DoctorTests.test_doctor_healthy_and_json,def test_doctor_healthy_and_json(self),663-674
-method,DoctorTests.test_doctor_cli,def test_doctor_cli(self),676-686
-method,DoctorTests.test_doctor_broken_config_and_stale_repo,def test_doctor_broken_config_and_stale_repo(self),688-705
-class,SDKAdapterTests,class SDKAdapterTests(unittest.TestCase),708-790
-method,SDKAdapterTests.test_v2_and_v1_loader_fallbacks,def test_v2_and_v1_loader_fallbacks(self),709-740
-method,SDKAdapterTests.test_missing_sdk_message,def test_missing_sdk_message(self),742-750
-method,SDKAdapterTests.test_all_eleven_tools_register_and_call,def test_all_eleven_tools_register_and_call(self),752-790
+method,MultiAgentTests.test_exact_paths_and_schemas,def test_exact_paths_and_schemas(self),361-394
+method,MultiAgentTests.test_open_code_uses_mcp_key_and_command_list,def test_open_code_uses_mcp_key_and_command_list(self),396-422
+method,MultiAgentTests.test_codex_toml_preserves_other_tables_and_uninstalls_cleanly,def test_codex_toml_preserves_other_tables_and_uninstalls_cleanly(self),424-460
+method,MultiAgentTests.test_zed_context_servers_shape,def test_zed_context_servers_shape(self),462-484
+method,MultiAgentTests.test_continue_yaml_written_and_removed,def test_continue_yaml_written_and_removed(self),486-504
+method,MultiAgentTests.test_skill_md_has_frontmatter_and_tool_docs,def test_skill_md_has_frontmatter_and_tool_docs(self),506-523
+method,MultiAgentTests.test_gemini_writes_settings_and_gemini_md,def test_gemini_writes_settings_and_gemini_md(self),525-536
+method,MultiAgentTests.test_every_json_client_installs_and_uninstalls,def test_every_json_client_installs_and_uninstalls(self),538-563
+method,MultiAgentTests.test_custom_config_json_toml_yaml_and_skill,def test_custom_config_json_toml_yaml_and_skill(self),565-590
+method,MultiAgentTests.test_custom_config_schema_inference_and_validation,def test_custom_config_schema_inference_and_validation(self),592-599
+method,MultiAgentTests.test_detected_selection_shortcut,def test_detected_selection_shortcut(self),601-616
+method,MultiAgentTests.test_print_config_covers_every_schema,def test_print_config_covers_every_schema(self),618-625
+method,MultiAgentTests.test_cli_custom_config_and_snippet_commands,def test_cli_custom_config_and_snippet_commands(self),627-652
+class,DoctorTests,class DoctorTests(unittest.TestCase),655-728
+method,DoctorTests._healthy,"def _healthy(self, root, home)",656-666
+method,DoctorTests.test_doctor_healthy_and_json,def test_doctor_healthy_and_json(self),668-679
+method,DoctorTests.test_doctor_cli,def test_doctor_cli(self),681-691
+method,DoctorTests.test_doctor_detects_same_size_same_mtime_edit,def test_doctor_detects_same_size_same_mtime_edit(self),693-709
+method,DoctorTests.test_doctor_broken_config_and_stale_repo,def test_doctor_broken_config_and_stale_repo(self),711-728
+class,SDKAdapterTests,class SDKAdapterTests(unittest.TestCase),731-813
+method,SDKAdapterTests.test_v2_and_v1_loader_fallbacks,def test_v2_and_v1_loader_fallbacks(self),732-763
+method,SDKAdapterTests.test_missing_sdk_message,def test_missing_sdk_message(self),765-773
+method,SDKAdapterTests.test_all_eleven_tools_register_and_call,def test_all_eleven_tools_register_and_call(self),775-813
 > src-tier-__init__.py
 > src-tier-cli.py
 > src-tier-doctor.py

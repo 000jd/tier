@@ -143,7 +143,10 @@ def run_doctor(root: str = ".", home: Optional[str] = None, env: Optional[dict] 
                 else:
                     checks.append(Check("repo lint", "PASS", "0 errors, 0 warnings"))
                 try:
-                    result = sync_repo(repo_path, root=root, write=False)
+                    # Doctor is authoritative: never trust the mtime+size cache,
+                    # because a same-size edit inside one timestamp tick (common
+                    # on Windows) would otherwise look up to date.
+                    result = sync_repo(repo_path, root=root, write=False, rehash=True)
                 except (OSError, ValueError) as e:
                     checks.append(Check("repo sync", "FAIL", str(e)))
                 else:

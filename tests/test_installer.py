@@ -359,31 +359,35 @@ class MultiAgentTests(unittest.TestCase):
         self.assertEqual(expected, set(specs))
 
     def test_exact_paths_and_schemas(self):
+        # Build expectations with os.path so the test holds on every platform.
+        p = os.path.abspath("/p")
+        h = os.path.abspath("/h")
+        j = os.path.join
         specs = {s.id: s for s in installer.client_specs(
-            "/p", "/h", {"APPDATA": "/appdata"}, "linux")}
+            p, h, {"APPDATA": os.path.abspath("/appdata")}, "linux")}
         cases = {
-            "command-code": ("/p/.commandcode/mcp.json", "mcpServers"),
-            "command-code-user": ("/h/.commandcode/mcp.json", "mcpServers"),
-            "opencode": ("/p/opencode.json", "opencode"),
-            "opencode-user": ("/h/.config/opencode/opencode.json", "opencode"),
-            "codex": ("/p/.codex/config.toml", "codex-toml"),
-            "codex-user": ("/h/.codex/config.toml", "codex-toml"),
-            "gemini": ("/p/.gemini/settings.json", "mcpServers"),
-            "gemini-user": ("/h/.gemini/settings.json", "mcpServers"),
-            "cursor": ("/p/.cursor/mcp.json", "mcpServers"),
-            "cursor-user": ("/h/.cursor/mcp.json", "mcpServers"),
-            "vscode": ("/p/.vscode/mcp.json", "servers"),
-            "windsurf": ("/h/.codeium/windsurf/mcp_config.json", "mcpServers"),
-            "roo": ("/p/.roo/mcp.json", "mcpServers"),
-            "trae": ("/p/.trae/mcp.json", "mcpServers"),
-            "junie": ("/p/.junie/mcp/mcp.json", "mcpServers"),
-            "junie-user": ("/h/.junie/mcp/mcp.json", "mcpServers"),
-            "kiro": ("/p/.kiro/settings/mcp.json", "mcpServers"),
-            "warp": ("/h/.warp/.mcp.json", "mcpServers"),
-            "zed": ("/h/.config/zed/settings.json", "context_servers"),
-            "continue": ("/p/.continue/mcpServers/tier.yaml", "continue-yaml"),
-            "skills": ("/p/.agents/skills/tier/SKILL.md", "skill-md"),
-            "skills-user": ("/h/.agents/skills/tier/SKILL.md", "skill-md"),
+            "command-code": (j(p, ".commandcode", "mcp.json"), "mcpServers"),
+            "command-code-user": (j(h, ".commandcode", "mcp.json"), "mcpServers"),
+            "opencode": (j(p, "opencode.json"), "opencode"),
+            "opencode-user": (j(h, ".config", "opencode", "opencode.json"), "opencode"),
+            "codex": (j(p, ".codex", "config.toml"), "codex-toml"),
+            "codex-user": (j(h, ".codex", "config.toml"), "codex-toml"),
+            "gemini": (j(p, ".gemini", "settings.json"), "mcpServers"),
+            "gemini-user": (j(h, ".gemini", "settings.json"), "mcpServers"),
+            "cursor": (j(p, ".cursor", "mcp.json"), "mcpServers"),
+            "cursor-user": (j(h, ".cursor", "mcp.json"), "mcpServers"),
+            "vscode": (j(p, ".vscode", "mcp.json"), "servers"),
+            "windsurf": (j(h, ".codeium", "windsurf", "mcp_config.json"), "mcpServers"),
+            "roo": (j(p, ".roo", "mcp.json"), "mcpServers"),
+            "trae": (j(p, ".trae", "mcp.json"), "mcpServers"),
+            "junie": (j(p, ".junie", "mcp", "mcp.json"), "mcpServers"),
+            "junie-user": (j(h, ".junie", "mcp", "mcp.json"), "mcpServers"),
+            "kiro": (j(p, ".kiro", "settings", "mcp.json"), "mcpServers"),
+            "warp": (j(h, ".warp", ".mcp.json"), "mcpServers"),
+            "zed": (j(h, ".config", "zed", "settings.json"), "context_servers"),
+            "continue": (j(p, ".continue", "mcpServers", "tier.yaml"), "continue-yaml"),
+            "skills": (j(p, ".agents", "skills", "tier", "SKILL.md"), "skill-md"),
+            "skills-user": (j(h, ".agents", "skills", "tier", "SKILL.md"), "skill-md"),
         }
         for client_id, (path, schema) in cases.items():
             self.assertEqual(specs[client_id].config_path, path, client_id)
@@ -612,12 +616,13 @@ class MultiAgentTests(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(home, ".commandcode/mcp.json")))
 
     def test_print_config_covers_every_schema(self):
-        text = installer.render_snippets("/proj", lambda name: "/opt/bin/tier-mcp")
+        resolver = lambda name: os.path.abspath(os.path.join("/opt/bin", "tier-mcp"))
+        text = installer.render_snippets(os.path.abspath("/proj"), resolver)
         for needle in ('"mcpServers"', '"servers"', '"mcp"', '"context_servers"',
                        "[mcp_servers.tier]", "mcpServers:", "name: tier", "claude mcp add",
                        "codex mcp add", "opencode mcp add", "gemini mcp add"):
             self.assertIn(needle, text, needle)
-        self.assertIn("/opt/bin/tier-mcp", text)
+        self.assertIn(resolver("tier-mcp"), text)
 
     def test_cli_custom_config_and_snippet_commands(self):
         from tier import cli
@@ -684,6 +689,24 @@ class DoctorTests(unittest.TestCase):
             )
             self.assertEqual(proc.returncode, 0, proc.stderr + proc.stdout)
             self.assertIn("PASS", proc.stdout)
+
+    def test_doctor_detects_same_size_same_mtime_edit(self):
+        """Doctor must not trust the mtime+size cache when checking staleness.
+
+        On Windows a same-size edit can land inside one timestamp tick, which
+        the fast path legitimately treats as unchanged. Doctor is the
+        authority, so it rehashes.
+        """
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
+            path = _put(root, "demo.py", "def demo():\n    return 1\n")
+            _put(root, "repo.tier", tier.dumps(tier.from_repo(root)))
+            st = os.stat(path)
+            _put(root, "demo.py", "def demo():\n    return 2\n")
+            os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))
+            checks = doctor.run_doctor(root, home=home, env={}, platform="linux",
+                                       find_executable=_which)
+            self.assertTrue(any(c.name == "repo sync" and c.status == "WARN" for c in checks))
+            self.assertEqual(doctor.exit_code(checks), 0)
 
     def test_doctor_broken_config_and_stale_repo(self):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as home:
