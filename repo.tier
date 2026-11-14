@@ -1,4 +1,4 @@
-%tier 1.2.0
+%tier 1.2.1
 %title tier repository map
 %sum 29 source files; languages: javascript 2, python 27; entrypoints: src/tier/__main__.py, src/tier/cli.py, src/tier/mcp/__main__.py, src/tier/mcp/server.py
 %rule Read the repo.tier module map before opening source files; fetch only the listed line ranges.
@@ -707,8 +707,8 @@ remember,Section,src/tier/models.py
   path src/tier/models.py
   language python
   lines 202
-  sha256 16f115c07db6ecaf
-  mtime 1794574125779279305
+  sha256 096fa064696f4272
+  mtime 1794591054710511646
   size 7166
 |symbols[15]{kind,name,signature,lines}
 function,_table_count,def _table_count(raw) -> int,24-29
@@ -1488,8 +1488,8 @@ SDKAdapterTests.test_all_twelve_tools_register_and_call,_put,.
   path tests/test_tier.py
   language python
   lines 2025
-  sha256 a8edc92e2dd47252
-  mtime 1794589677448791567
+  sha256 f563cff4ae35fc6f
+  mtime 1794591142381393621
   size 98896
 |symbols[122]{kind,name,signature,lines}
 class,T,class T(unittest.TestCase),22-822

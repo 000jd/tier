@@ -7,7 +7,7 @@ import os
 import re
 from dataclasses import dataclass, field
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 SIGIL_CHARS = "%@?!=|>$;\\"
 SEC_RE = re.compile(r"^@([a-z0-9][a-z0-9_.-]*)(?:[ \t]+(.*))?$")
 HDR_RE = re.compile(r"^%([a-z][a-z0-9_-]*)(?:[ \t]+(.*))?$")

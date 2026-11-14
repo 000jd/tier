@@ -1,5 +1,5 @@
-%tier 1.2.0
-%title TIER v1.2.0
+%tier 1.2.1
+%title TIER v1.2.1
 %sum TIER (Tiered Information for Efficient Retrieval) is a line-oriented text format plus a local context, memory, and code-navigation engine for AI agents.
 File extension: `.tier`. Encoding: UTF-8, LF line endings. The reference implementation is a Python 3.10+ package in a `src/` layout and uses the standard library only.
 @package-layout Package layout
@@ -76,7 +76,7 @@ A key/value block ends at the first line that is not indented. All scalars are s
 @document-shape Document shape
 ? code block
 ```
-%tier 1.2.0
+%tier 1.2.1
 %title Payments API Runbook
 %sum Deploying, operating, and debugging the payments API
 %rule Never log card numbers
@@ -324,7 +324,7 @@ directly, so `tier impact PATH MODULE#SYMBOL` always reports every call edge in 
 The adapter wraps all 12 tools with the official SDK's v2 `MCPServer` (falling back to v1 `FastMCP`). It supports `--transport stdio`, `--transport streamable-http --host HOST --port PORT`, and `mcp dev` via the module-level `mcp`/`server` object. If the extra is missing, it prints the exact install command and exits nonzero without a traceback. The default `tier-mcp` / `python -m tier.mcp` server remains the zero-dependency stdlib implementation.
 @packaging Packaging
 ? `pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package...
-`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.2.0` with no required third-party dependencies and three console scripts:
+`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.2.1` with no required third-party dependencies and three console scripts:
 |packaging[3]{Command,Entry point}
 `tier`,`tier.cli:main`
 `tier-mcp`,`tier.mcp.server:main`
@@ -395,8 +395,8 @@ TIER v1.1.0 measures:
 - Self-index: the checked-in `repo.tier` maps 24 source files (20 package modules plus two test files, the benchmark runner, and the JS token counter) in 11,034 tokens; its L0 index is 893 tokens (8 percent).
 - I: a 197-section merged corpus returns 15/15 `hit@1` and 15/15 `hit@2` on 15 mixed queries; the mean top-1 fetch is 134 tokens, and L0 + top-1 averages 6,039 tokens versus 52,275 for full-corpus loading (88 percent fewer).
 @backward-compatibility Backward compatibility
-? TIER v1.2.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table...
-TIER v1.2.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.2.0`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable. Call-edge filtering is a render-time narrowing only: the stored `|calls` table is unchanged, `tier impact` still reads every edge, and `include_calls="all"` reproduces the full table.
+? TIER v1.2.1 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table...
+TIER v1.2.1 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.2.1`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable. Call-edge filtering is a render-time narrowing only: the stored `|calls` table is unchanged, `tier impact` still reads every edge, and `include_calls="all"` reproduces the full table.
 @non-goals Non-goals
 ? TIER is not a replacement for JSON as a wire format or for databases.
 It does not define a schema language, and it does not claim to improve answer accuracy: that must be measured per model and task. The JS/TS/Go/Rust symbol extractors are lightweight regex scanners, not full language parsers.

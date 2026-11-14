@@ -1,4 +1,4 @@
-# TIER v1.2.0
+# TIER v1.2.1
 
 TIER (Tiered Information for Efficient Retrieval) is a line-oriented text format plus a local context, memory, and code-navigation engine for AI agents. File extension: `.tier`. Encoding: UTF-8, LF line endings. The reference implementation is a Python 3.10+ package in a `src/` layout and uses the standard library only.
 
@@ -94,7 +94,7 @@ A key/value block ends at the first line that is not indented. All scalars are s
 ## Document shape
 
 ```
-%tier 1.2.0
+%tier 1.2.1
 %title Payments API Runbook
 %sum Deploying, operating, and debugging the payments API
 %rule Never log card numbers
@@ -414,7 +414,7 @@ directly, so `tier impact PATH MODULE#SYMBOL` always reports every call edge in 
 
 ## Packaging
 
-`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.2.0` with no required third-party dependencies and three console scripts:
+`pyproject.toml` declares the standard-library package (distribution `tier-ctx`, import package `tier`) at version `1.2.1` with no required third-party dependencies and three console scripts:
 
 | Command | Entry point |
 |---|---|
@@ -505,7 +505,7 @@ See `benchmarks/BENCH.txt` for the full A-I output. TIER v1.1.0 measures:
 
 ## Backward compatibility
 
-TIER v1.2.0 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.2.0`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable. Call-edge filtering is a render-time narrowing only: the stored `|calls` table is unchanged, `tier impact` still reads every edge, and `include_calls="all"` reproduces the full table.
+TIER v1.2.1 parses every valid v0.1, v0.2, and v0.3 document, keeps the on-disk table representation unchanged, and preserves the existing CLI flags. Untagged `<<<` blocks still close at the first `>>>` line. Repo maps from v0.3 gain fingerprints on the first `sync` and are upgraded in place. New output is written as `%tier 1.2.1`; slicing, sync, impact, hooks, and packaging are additive. Parser hardening (BOM, NUL table cells, over-declared row counts, CRLF, and the trailing-newline phantom row) changes only malformed-edge behavior and keeps valid documents byte-stable. Call-edge filtering is a render-time narrowing only: the stored `|calls` table is unchanged, `tier impact` still reads every edge, and `include_calls="all"` reproduces the full table.
 
 ## Non-goals
 
